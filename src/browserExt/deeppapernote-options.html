@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>DeepPaperNote Connector Settings</title>
+	<style>
+		:root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+		body { margin: 0; background: Canvas; color: CanvasText; }
+		main { max-width: 680px; margin: 48px auto; padding: 0 24px; }
+		header { display: flex; gap: 16px; align-items: center; margin-bottom: 32px; }
+		header img { width: 52px; height: 52px; }
+		h1 { margin: 0; font-size: 1.65rem; }
+		p { margin: 4px 0 0; color: GrayText; }
+		label { display: block; font-weight: 600; margin-bottom: 8px; }
+		input { box-sizing: border-box; width: 100%; padding: 10px 12px; font: inherit; }
+		.actions { display: flex; gap: 10px; margin-top: 16px; }
+		button { padding: 9px 14px; font: inherit; cursor: pointer; }
+		#status { min-height: 1.5em; margin-top: 18px; color: CanvasText; }
+		.meta { margin-top: 32px; font-size: .875rem; }
+	</style>
+</head>
+<body>
+	<main>
+		<header>
+			<img src="Icon-64.png" alt="">
+			<div><h1>DeepPaperNote Connector</h1><p>PDF-only archive settings</p></div>
+		</header>
+		<label for="domain">Default research domain</label>
+		<input id="domain" name="domain" autocomplete="off" maxlength="80">
+		<div class="actions">
+			<button id="save" type="button">Save</button>
+			<button id="check" type="button">Check native host</button>
+		</div>
+		<div id="status" role="status" aria-live="polite"></div>
+		<p class="meta">Extension ID: <code id="extension-id"></code></p>
+	</main>
+	<script src="browser-polyfill.js"></script>
+	<script src="deeppapernote-options.js"></script>
+</body>
+</html>

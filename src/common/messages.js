@@ -226,6 +226,10 @@ var MESSAGES = {
 			}
 		}
 	},
+	DeepPaperNote: {
+		preview: true,
+		save: true,
+	},
 	Errors: {
 		log: false,
 		getErrors: true,

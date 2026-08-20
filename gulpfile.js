@@ -141,6 +141,7 @@ var backgroundInclude = [
 	'translate/translator.js',
 	'botBypass.js',
 	'itemSaver_background.js',
+	'deepPaperNote.js',
 	'translators.js',
 	'cachedTypes.js',
 	'errors_webkit.js',

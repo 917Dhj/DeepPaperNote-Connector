@@ -30,7 +30,6 @@ if (!Zotero.isManifestV3) {
 Zotero.Connector_Browser = new function() {
 	var _tabInfo = {};
 	var _tabInjections = {};
-	var _incompatibleVersionMessageShown;
 	var _injectTranslationScripts = [
 		/*INJECT SCRIPTS*/
 	];
@@ -242,14 +241,8 @@ Zotero.Connector_Browser = new function() {
 	 * Called when Zotero goes online or offline
 	 * @param [String|Boolean] version - either `false` or version string from X-Zotero-Version header
 	 */
-	this.onStateChange = function(version) {
-		if (version) {
-			Zotero.Prefs.set('firstSaveToServer', true);
-			// TODO: Enable once 5.0 is out, so that ContentTypeHandlers show an upgradeClient message instead
-			parseInt(version) >= 5 && Zotero.ContentTypeHandler.enable();
-		} else {
-			Zotero.ContentTypeHandler.disable();
-		}
+	this.onStateChange = function() {
+		Zotero.ContentTypeHandler.disable();
 	}
 	
 	this.onTabActivated = function(tab) {
@@ -259,16 +252,7 @@ Zotero.Connector_Browser = new function() {
 	/**
 	 * Called if Zotero version is determined to be incompatible with Standalone
 	 */
-	this.onIncompatibleStandaloneVersion = function(zoteroVersion, standaloneVersion) {
-		if(_incompatibleVersionMessageShown) return;
-		alert('Zotero Connector for Chrome '+zoteroVersion+' is incompatible with the running '+
-			'version of Zotero Standalone'+(standaloneVersion ? " ("+standaloneVersion+")" : "")+
-			'. Zotero Connector will continue to operate, but functionality that relies upon '+
-			'Zotero Standalone may be unavailable.\n\n'+
-			'Please ensure that you have installed the latest version of these components. See '+
-			'https://www.zotero.org/download for more details.');
-		_incompatibleVersionMessageShown = true;
-	}
+	this.onIncompatibleStandaloneVersion = function() {};
 
 	this.onZoteroButtonElementClick = function(tab) {
 		return _browserAction(tab);
@@ -566,7 +550,7 @@ Zotero.Connector_Browser = new function() {
 	};
 	
 	this.openPreferences = function(paneID, tab) {
-		this.openTab(browser.runtime.getURL(`preferences/preferences.html#${paneID}`), tab);
+		this.openTab(browser.runtime.getURL('deeppapernote-options.html'), tab);
 	};
 	
 	this.openConfigEditor = function(tab) {
@@ -672,9 +656,7 @@ Zotero.Connector_Browser = new function() {
 			return;
 		}
 		
-		// Show the save menu if we have more than one save option to show, which is true in all cases
-		// other than for PDFs with no translator
-		var showSaveMenu = (translators && translators.length) || !isPDF;
+		var showSaveMenu = translators && translators.length;
 		let unproxiedURL = Zotero.Proxies.proxyToProper(url, true);
 		var showProxyMenu = !isPDF
 			&& Zotero.Proxies.proxies.length > 0
@@ -686,7 +668,7 @@ Zotero.Connector_Browser = new function() {
 			saveMenuID = "zotero-context-menu-save-menu";
 			browser.contextMenus.create({
 				id: saveMenuID,
-				title: `${Zotero.getString('general_saveTo', ZOTERO_CONFIG.CLIENT_NAME)}`,
+				title: 'Save to DeepPaperNote',
 				contexts: [...buttonContext, 'page', 'selection']
 			});
 		}
@@ -694,7 +676,6 @@ Zotero.Connector_Browser = new function() {
 		if (translators && translators.length) {
 			_showTranslatorIcon(tab, translators[0]);
 			_showTranslatorContextMenuItem(translators, saveMenuID);
-			_showNoteContextMenuItems(translators, saveMenuID);
 		} else if (isPDF) {
 			Zotero.Connector_Browser._showPDFIcon(tab);
 		} else {
@@ -703,8 +684,6 @@ Zotero.Connector_Browser = new function() {
 		
 		if (isPDF) {
 			_showPDFContextMenuItem(saveMenuID);
-		} else {
-			_showWebpageContextMenuItem(saveMenuID);
 		}
 		
 		// If unproxied, show "Reload via Proxy" options
@@ -743,7 +722,7 @@ Zotero.Connector_Browser = new function() {
 			Zotero.Connector_Browser.saveAsWebpage(tab);
 		},
 		"zotero-context-menu-preferences": function () {
-			browser.tabs.create({url: browser.runtime.getURL('preferences/preferences.html')});
+			browser.tabs.create({url: browser.runtime.getURL('deeppapernote-options.html')});
 		},
 		"zotero-context-menu-copy-unproxied-url": async (info, tab) => {
 			// navigator.clipboard.writeText doesn't work in the background page because it has no focus
@@ -804,34 +783,11 @@ Zotero.Connector_Browser = new function() {
 	}
 	
 	function _showZoteroStatus(tabID, message) {
-		Zotero.Connector.checkIsOnline().then(function(isOnline) {
-			var icon, title;
-			if (isOnline) {
-				icon = "images/zotero-new-z-16px.png";
-				title = "Zotero is Online";
-			}
-			else if (isOnline === null) {
-				// Zotero's status is unknown without localhost access, so don't claim it's offline
-				icon = "images/zotero-new-z-16px.png";
-				title = "Zotero Connector";
-			}
-			else {
-				icon = "images/zotero-z-16px-offline.png";
-				title = "Zotero is Offline";
-			}
-			if (typeof message === 'string') {
-				title = message;
-			}
-			browser.action.setIcon({
-				tabId: tabID,
-				path: icon
-			});
-
-			browser.action.setTitle({
-				tabId: tabID,
-				title
-			});
+		browser.action.setIcon({
+			tabId: tabID,
+			path: browser.runtime.getURL('Icon-32.png')
 		});
+		browser.action.setTitle({tabId: tabID, title: message || 'DeepPaperNote Connector'});
 		browser.action.disable(tabID);
 		browser.contextMenus.removeAll();
 	}
@@ -861,14 +817,9 @@ Zotero.Connector_Browser = new function() {
 	}
 
 	function _showWebpageIcon(tab) {
-		browser.action.setIcon({
-			tabId: tab.id,
-			path: Zotero.ItemTypes.getImageSrc("webpage-gray")
-		});
-		let withSnapshot = Zotero.Connector.isOnline ? Zotero.Connector.prefs.automaticSnapshots :
-			Zotero.Prefs.get('automaticSnapshots');
-		let title = `Save to Zotero (Web Page ${withSnapshot ? 'with' : 'without'} Snapshot)`;
-		browser.action.setTitle({tabId: tab.id, title});
+		browser.action.setIcon({tabId: tab.id, path: browser.runtime.getURL('Icon-32.png')});
+		browser.action.setTitle({tabId: tab.id, title: 'No research PDF detected'});
+		browser.action.disable(tab.id);
 	}
 
 	this._showPDFIcon = function(tab) {
@@ -878,7 +829,7 @@ Zotero.Connector_Browser = new function() {
 		});
 		browser.action.setTitle({
 			tabId: tab.id,
-			title: "Save to Zotero (PDF)"
+			title: "Save PDF to DeepPaperNote"
 		});
 	}
 
@@ -893,43 +844,10 @@ Zotero.Connector_Browser = new function() {
 		}
 	}
 
-	function _showNoteContextMenuItems(translators, parentID) {
-		if (translators[0].itemType == "multiple") return;
-		browser.contextMenus.create({
-			id: "zotero-context-menu-translator-save-with-selection-note",
-			title: "Create Zotero Item and Note from Selection",
-			parentId: parentID,
-			contexts: ['selection']
-		});
-	}
-
-	function _showWebpageContextMenuItem(parentID) {
-		var fns = [];
-		fns.push(() => browser.contextMenus.create({
-			id: "zotero-context-menu-webpage-withSnapshot-save",
-			title: "Save to Zotero (Web Page with Snapshot)",
-			parentId: parentID,
-			contexts: ['page', ...buttonContext]
-		}));
-		fns.push(() => browser.contextMenus.create({
-			id: "zotero-context-menu-webpage-withoutSnapshot-save",
-			title: "Save to Zotero (Web Page without Snapshot)",
-			parentId: parentID,
-			contexts: ['page', ...buttonContext]
-		}));
-		// Swap order if automatic snapshots disabled
-		let withSnapshot = Zotero.Connector.isOnline ? Zotero.Connector.prefs.automaticSnapshots :
-			Zotero.Prefs.get('automaticSnapshots');
-		if (!withSnapshot) {
-			fns = [fns[1], fns[0]];
-		}
-		fns.forEach((fn) => fn());
-	}
-
 	function _showPDFContextMenuItem(parentID) {
 		browser.contextMenus.create({
 			id: "zotero-context-menu-pdf-save",
-			title: "Save to Zotero (PDF)",
+			title: "Save PDF to DeepPaperNote",
 			parentId: parentID,
 			contexts: ['all']
 		});
@@ -980,7 +898,7 @@ Zotero.Connector_Browser = new function() {
 	function _showTabContextMenuItem() {
 		browser.contextMenus.create({
 			id: "zotero-context-menu-tabs",
-			title: `${Zotero.getString('general_saveTo', ZOTERO_CONFIG.CLIENT_NAME)}`,
+			title: 'Save highlighted tabs to DeepPaperNote',
 			contexts: ['tab']
 		});
 	}
@@ -1006,7 +924,7 @@ Zotero.Connector_Browser = new function() {
 		});
 		browser.action.setTitle({
 			tabId: tab.id,
-			title: "Zotero Connector"
+			title: "DeepPaperNote Connector"
 		});
 		browser.action.enable(tab.id);
 	}
@@ -1167,7 +1085,7 @@ Zotero.Connector_Browser = new function() {
 	
 	function _getTranslatorLabel(translator) {
 		var translatorName = translator.label;
-		return "Save to Zotero (" + translatorName + ")";
+		return "Save to DeepPaperNote (" + translatorName + ")";
 	}
 	
 	Zotero.Messaging.addMessageListener("selectDone", function(data) {

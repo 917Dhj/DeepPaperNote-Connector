@@ -26,6 +26,54 @@
 import { background } from '../support/utils.mjs';
 
 describe("ItemSaver Background", function() {
+	describe('DeepPaperNote native protocol', function() {
+		it('downloads one PDF and streams it to the native host', async function() {
+			const result = await background(async function() {
+				const pdf = new TextEncoder().encode('%PDF-1.7\nfixture\n%%EOF\n').buffer;
+				let messages = [];
+				try {
+					sinon.stub(Zotero.ItemSaver, '_fetchAttachment').resolves(pdf);
+					sinon.stub(browser.runtime, 'connectNative').callsFake(() => {
+						let messageListener;
+						return {
+							onMessage: {addListener: listener => messageListener = listener},
+							onDisconnect: {addListener: () => 0},
+							postMessage(message) {
+								messages.push(message);
+								let response = message.type === 'start'
+									? {ok: true, upload_id: 'upload-1'}
+									: message.type === 'finish'
+										? {ok: true, status: 'saved', path: 'Research/Papers/Test/Paper/Paper.pdf'}
+										: {ok: true};
+								queueMicrotask(() => messageListener(response));
+							},
+							disconnect() {},
+						};
+					});
+					let response = await Zotero.DeepPaperNote.save({
+						title: 'Paper',
+						date: '2026',
+						creators: [{creatorType: 'author', lastName: 'Fei'}],
+						attachments: [{mimeType: 'application/pdf', url: 'https://example.com/paper.pdf'}],
+					}, {domain: 'Test'}, {id: 123});
+					return {response, messages};
+				}
+				finally {
+					Zotero.ItemSaver._fetchAttachment.restore();
+					browser.runtime.connectNative.restore();
+				}
+			});
+
+			assert.equal(result.response.status, 'saved');
+			assert.deepEqual(result.messages.map(message => message.type), ['start', 'chunk', 'finish']);
+			assert.equal(result.messages[0].item.domain, 'Test');
+			assert.equal(result.messages[0].item.title, 'Paper');
+			assert.notProperty(result.messages[0].item, 'attachments');
+			assert.equal(result.messages[1].sequence, 0);
+			assert.match(result.messages[2].sha256, /^[0-9a-f]{64}$/);
+		});
+	});
+
 	describe('_fetchAttachment', function() {
 		let attachment, mockTab;
 		

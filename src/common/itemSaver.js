@@ -43,6 +43,7 @@ let ItemSaver = function(options) {
 	this._proxy = options.proxy;
 	this._baseURI = options.baseURI;
 	this._itemType = options.itemType;
+	this._promptForMetadata = !!options.promptForMetadata;
 	this._items = [];
 	this._singleFile = false;
 	
@@ -90,17 +91,89 @@ ItemSaver.prototype = {
 	 *     on failure or attachmentCallback(attachment, progressPercent) periodically during saving.
 	 * @param {Function} [itemsDoneCallback] A callback that receives progress for top-item saving.
 	 */
-	saveItems: async function (items, attachmentCallback, itemsDoneCallback=()=>0) {
+	saveItems: async function (items, attachmentCallback=()=>0, itemsDoneCallback=()=>0) {
 		Zotero.debug(`ItemSaver.saveItems: Saving ${items.length} items`);
-		try {
-			return await this._saveToZotero(items, attachmentCallback, itemsDoneCallback);
-		}
-		catch (e) {
-			if (e.status == 0) {
-				return this._saveToServer(items, attachmentCallback, itemsDoneCallback);
+		for (let item of items) {
+			let pdfs = (item.attachments || []).filter(attachment =>
+				attachment.snapshot !== false && attachment.mimeType?.toLowerCase() === 'application/pdf'
+			);
+			if (pdfs.length !== 1) {
+				throw new Error(`DeepPaperNote requires exactly one PDF attachment; found ${pdfs.length}`);
 			}
-  			throw e;
+			let attachment = pdfs[0];
+			this._setAttachmentReferer(attachment);
+			let overrides = await this._confirmDeepPaperNoteArchive(item);
+			attachment.id = attachment.id || Zotero.Utilities.randomString(8);
+			attachmentCallback(attachment, 0);
+			try {
+				item.deepPaperNote = await Zotero.DeepPaperNote.save(item, overrides);
+				attachmentCallback(attachment, 100);
+			}
+			catch (error) {
+				attachmentCallback(attachment, false, error);
+				throw error;
+			}
 		}
+		itemsDoneCallback(items);
+		return items;
+	},
+
+	_promptDeepPaperNoteInput: async function(title, message, inputText) {
+		let result = await Zotero.ModalPrompt.confirm({
+			title,
+			message,
+			input: true,
+			inputText,
+			button1Text: 'Continue',
+			button2Text: 'Cancel',
+		});
+		if (result.button !== 1) throw new Error('DeepPaperNote save cancelled');
+		let value = (result.inputText || '').trim();
+		if (!value) throw new Error(`${title} is required`);
+		return value;
+	},
+
+	_confirmDeepPaperNoteArchive: async function(item) {
+		let overrides = {};
+		if (this._promptForMetadata || !item.title?.trim()) {
+			overrides.title = await this._promptDeepPaperNoteInput(
+				'Paper title', 'Confirm the paper title.', item.title || ''
+			);
+		}
+		let authors = (item.creators || []).filter(creator =>
+			creator.creatorType === 'author' && (creator.lastName || creator.name)
+		);
+		if (!authors.length) {
+			overrides.authorShortName = await this._promptDeepPaperNoteInput(
+				'Author', 'Enter the short author name used in the PDF filename.', ''
+			);
+		}
+		let year = `${item.date || ''}`.match(/(?:19|20)\d{2}/)?.[0] || '';
+		if (!year) {
+			overrides.year = await this._promptDeepPaperNoteInput(
+				'Publication year', 'Enter a four-digit publication year.', ''
+			);
+		}
+
+		let domain = await Zotero.Prefs.getAsync('deepPaperNote.domain').catch(() => '未分类');
+		domain = await this._promptDeepPaperNoteInput(
+			'DeepPaperNote domain',
+			`Title: ${overrides.title || item.title}<br>`
+				+ `Author: ${overrides.authorShortName || authors.map(author => author.lastName || author.name).join(', ')}<br>`
+				+ `Year: ${overrides.year || year}`,
+			domain || '未分类'
+		);
+		overrides.domain = domain;
+		let preview = await Zotero.DeepPaperNote.preview(item, overrides);
+		let confirmed = await Zotero.ModalPrompt.confirm({
+			title: 'Save to DeepPaperNote',
+			message: `Final path:<br>${preview.path}`,
+			button1Text: 'Save PDF',
+			button2Text: 'Cancel',
+		});
+		if (confirmed.button !== 1) throw new Error('DeepPaperNote save cancelled');
+		Zotero.Prefs.set('deepPaperNote.domain', domain);
+		return overrides;
 	},
 	
 	_saveToZotero: async function (items, attachmentCallback, itemsDoneCallback=()=>0) {

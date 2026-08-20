@@ -307,15 +307,12 @@ let PageSaving = {
 	 * @returns {Promise<*>}
 	 */
 	async saveAsWebpage({ title=document.title, snapshot: saveSnapshot=true } = {}) {
-		var result = await Zotero.Inject.checkActionToServer();
-		if (!result) return;
-
 		var isTextLike = document.contentType.startsWith('text')
 			|| document.contentType.includes('html');
 		if (!isTextLike) {
 			return await this._saveAsStandaloneAttachment({title, saveSnapshot});
 		}
-		return await this._saveAsWebpage({title, saveSnapshot});
+		throw new Error('DeepPaperNote Connector needs a detected paper translator with one PDF attachment');
 	},
 	
 	async _saveAsWebpage({ title, saveSnapshot } = {}) {
@@ -436,13 +433,11 @@ let PageSaving = {
 		if (!title) {
 			title = new URL(document.location.href).pathname.split('/').pop();
 		}
-		let itemType = "webpage";
-		if (document.contentType === 'application/pdf') {
-			itemType = "pdf"
+		title = title.replace(/\.pdf$/i, '');
+		if (document.contentType !== 'application/pdf') {
+			throw new Error('DeepPaperNote Connector currently supports PDF attachments only');
 		}
-		else if (document.contentType === 'application/epub+zip') {
-			itemType = "epub";
-		}
+		let itemType = "pdf";
 
 		let progressItem = {
 			sessionID,
@@ -469,45 +464,28 @@ let PageSaving = {
 		}
 
 		try {
-			await Zotero.ItemSaver.fetchAttachmentSafari(standaloneAttachment);
-			let { canRecognize } = await Zotero.ItemSaver.saveStandaloneAttachmentToZotero(standaloneAttachment, sessionID)
-			Zotero.Messaging.sendMessage("progressWindow.sessionCreated", { sessionID });
-			progressItem.progress = 100;
-			Zotero.Messaging.sendMessage("progressWindow.itemProgress", { ...progressItem, ...{ progress: 100 } });
-
-			if (canRecognize) {
-				let item = await Zotero.Connector.callMethod("getRecognizedItem", { sessionID: sessionID });
-				if (item) {
-					item.id = 2;
-					item.iconSrc = Zotero.ItemTypes.getImageSrc(item.itemType);
-					progressItem.parentItem = 2;
-					Zotero.Messaging.sendMessage("progressWindow.itemProgress", { ...item, ...{ progress: 100 } });
-					setTimeout(() => {
-						Zotero.Messaging.sendMessage("progressWindow.itemProgress", { ...progressItem, ...{ progress: 100 } });
-					}, 50);
-				}
-			}
-
+			let itemSaver = new Zotero.ItemSaver({sessionID, promptForMetadata: true});
+			this.sessionDetails.itemSaver = itemSaver;
+			await itemSaver.saveItems([{
+				itemType: 'document',
+				title,
+				creators: [],
+				date: '',
+				url: document.location.toString(),
+				attachments: [standaloneAttachment],
+			}], (attachment, progress) => {
+				Zotero.Messaging.sendMessage("progressWindow.itemProgress", {
+					...progressItem,
+					progress: progress === false ? 0 : progress,
+				});
+			});
 			Zotero.Messaging.sendMessage("progressWindow.done", [true]);
 			Object.assign(this.sessionDetails, {
 				id: sessionID,
 				url: document.location.href,
 			});
 		} catch (e) {
-			// Client unavailable
-			if (e.status === 0) {
-				Zotero.Messaging.sendMessage("progressWindow.itemProgress", { ...progressItem, ...{ progress: 0 } });
-				await Zotero.ItemSaver.saveAttachmentToServer(standaloneAttachment);
-				Zotero.Messaging.sendMessage("progressWindow.itemProgress", { ...progressItem, ...{ progress: 100 } });
-				Zotero.Messaging.sendMessage("progressWindow.done", [true]);
-				return;
-			}
-			else if (!e.value || e.value.libraryEditable != false) {
-				// Unexpected error, including a timeout (which we don't want to
-				// result in a save to the server, because it's possible the request
-				// will still be processed)
-				Zotero.Messaging.sendMessage("progressWindow.done", [false, 'unexpectedError']);
-			}
+			Zotero.Messaging.sendMessage("progressWindow.done", [false, 'unexpectedError']);
 			throw e;
 		}
 	},
@@ -518,8 +496,6 @@ let PageSaving = {
 	 * with selection as a note.
 	 */
 	async onTranslate(translatorID, options={}) {
-		let result = await Zotero.Inject.checkActionToServer();
-		if (!result) return;
 		let translatorIndex = this.translators.findIndex(t => t.translatorID === translatorID);
 		let translator = this.translators[translatorIndex];
 		Zotero.debug(`PageSaving.onTranslate: Translating with ${translator.label}, ${JSON.stringify(options)}`);
@@ -606,9 +582,6 @@ let PageSaving = {
 	 * Entry point for clicking on the Zotero button to save when no translators are available
 	 */
 	async onSaveAsWebpage([ title=document.title, options={} ]) {
-		var result = await Zotero.Inject.checkActionToServer();
-		if (!result) return;
-
 		Zotero.debug(`PageSaving.onSaveAsWebpage: Saving webpage, ${JSON.stringify(options)}`);
 
 		var translatorID = 'webpage' + (options.snapshot ? 'WithSnapshot' : '');

@@ -1,3 +1,50 @@
+# DeepPaperNote Connector
+
+DeepPaperNote Connector is an experimental Chrome extension that keeps Zotero Connector's mature Translator and attachment-acquisition chain, then replaces the Zotero library/zotero.org save boundary with a local DeepPaperNote PDF archive host.
+
+It saves exactly one validated source PDF per paper into:
+
+```text
+Research/Papers/<领域>/<paper_slug>/
+└── <作者短名> - <年份> - <规范标题>.pdf
+```
+
+It does not create Markdown notes, `images/`, snapshots, or `metadata.json`. Existing PDFs are never overwritten: identical SHA-256 content is idempotent, while a different PDF can use one deterministic DOI/arXiv suffix before the host fails closed.
+
+## MVP setup (macOS Chrome)
+
+```sh
+git submodule update --init
+npm ci
+./build.sh -d
+```
+
+Load `build/manifestv3` from `chrome://extensions` with Developer Mode enabled, then copy the generated extension ID and install the native host:
+
+```sh
+python3 native_host/deeppapernote_host.py install \
+  --vault "/absolute/path/to/your/Obsidian vault" \
+  --extension-id "<32-character Chrome extension ID>"
+```
+
+Reload the extension after installing the host. On a detected paper page, the extension shows the extracted title, authors, year, editable domain, and final path before downloading the PDF. A directly opened PDF asks for missing title/author/year fields before saving.
+
+The native protocol is versioned and chunked. The browser retains Zotero's cookie/referrer and anti-bot-aware download path, while the host receives only archive metadata and PDF bytes. The host accepts calls only from the extension ID recorded in Chrome's native-host manifest and only writes beneath the configured vault and papers directory.
+
+## Current boundary
+
+- Chrome/Manifest V3 and the macOS native-host installer are the supported MVP path.
+- One unambiguous PDF attachment is required per selected paper; ambiguous or non-PDF results fail closed.
+- Firefox, Edge, Safari, browser-store packaging, OCR, note generation, and batch/background capture are not implemented.
+
+## Upstream and license
+
+This standalone repository is not a GitHub fork, but retains the complete history of [zotero/zotero-connectors](https://github.com/zotero/zotero-connectors). `upstream` tracks Zotero and the initial DeepPaperNote baseline is `de350a7e6437bad312afa46f23d0311aee4fbca7`. The derived connector remains AGPLv3; original copyright notices and [`COPYING`](COPYING) are retained. DeepPaperNote Connector is not affiliated with or endorsed by Zotero.
+
+## Upstream development reference
+
+The remaining sections are retained from the upstream developer documentation for synchronization and build maintenance.
+
 # Zotero Connectors
 
 [![Build Status](https://travis-ci.org/zotero/zotero-connectors.svg?branch=master)](https://travis-ci.org/zotero/zotero-connectors)

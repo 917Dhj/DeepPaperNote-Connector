@@ -72,76 +72,9 @@ Zotero.WebRequestIntercept.addListener('headersReceived', function(details) {
 });
 
 Zotero.Utilities.saveWithoutProgressWindow = async function (tab, frameId) {
-	let url = tab.url;
-	let tabInfo = Zotero.Connector_Browser.getTabInfo(tab.id);
-	const pdf = tabInfo.isPDF;
-	// Get URL from iframe
-	if (frameId) {
-		({ url } = await browser.webNavigation.getFrame({ tabId: tab.id, frameId }));
-	}
-	
-	var data = {
-		url,
-		pdf,
-		mimeType: tabInfo.contentType,
-		sessionID: Zotero.Utilities.randomString()
-	};
-	if (pdf) {
-		data.title = tab.title || new URL(url).pathname.split('/').pop();
-	}
-	else {
-		data.title = url;
-	}
-	try {
-		browser.browserAction.setIcon({
-			tabId:tab.id,
-			path: {
-				'16': 'images/spinner-16px.png',
-				'32': 'images/spinner-16px@2x.png'
-			}
-		});
-		browser.browserAction.setTitle({
-			tabId:tab.id,
-			title: "Saving…"
-		});
-		
-		try {
-			// Check availability before fetching the attachment
-			await Zotero.Connector.ping();
-			await Zotero.ItemSaver.saveStandaloneAttachmentToZotero(data, data.sessionID, tab);
-		}
-		catch (e) {
-			if (e.status !== 0 || !pdf) throw e;
-			data.linkMode = 'imported_url';
-			await Zotero.ItemSaver.saveAttachmentToServer(data, tab);
-		}
-		
-		browser.browserAction.setIcon({
-			tabId:tab.id,
-			path: {
-				'16': 'images/tick.png',
-				'32': 'images/tick@2x.png'
-			}
-		});
-		browser.browserAction.setTitle({
-			tabId:tab.id,
-			title: "Saved!"
-		});
-		tabInfo.isPDF = false;
-	
-	} catch (e) {
-		if (e.status !== 0) {
-			Zotero.logError(e);
-		}
-		
-		browser.browserAction.setIcon({
-			tabId:tab.id,
-			path: "images/cross.png"
-		});
-		
-		browser.browserAction.setTitle({
-			tabId:tab.id,
-			title: "Saving failed. Is Zotero running?"
-		});
-	}
+	await browser.browserAction.setIcon({tabId: tab.id, path: "images/cross.png"});
+	await browser.browserAction.setTitle({
+		tabId: tab.id,
+		title: "Open the PDF in a normal tab to confirm its metadata and save it."
+	});
 }

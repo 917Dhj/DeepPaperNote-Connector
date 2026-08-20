@@ -1,20 +1,20 @@
 {
-	"name": "Zotero Connector",
+	"name": "DeepPaperNote Connector",
 	"manifest_version": 3,
 	"version": "AUTOFILLED",
-	"description": "Save references to Zotero from your web browser",
+	"description": "Archive research PDFs into a DeepPaperNote Obsidian vault",
 	"default_locale": "en",
 	"action": {
 		"default_icon": {
-			"16": "images/treeitem-webpage-gray.png",
-			"32": "images/treeitem-webpage-gray@2x.png",
-			"48": "images/treeitem-webpage-gray@48px.png"
+			"16": "Icon-16.png",
+			"32": "Icon-32.png",
+			"48": "Icon-64.png"
 		},
-		"default_title": "Save to Zotero"
+		"default_title": "Save to DeepPaperNote"
 	},
 	"host_permissions": ["http://127.0.0.1/*", "https://repo.zotero.org/*", "https://api.zotero.org/*", "http://*/*", "https://*/*"],
 	"permissions": ["tabs", "contextMenus", "cookies", "scripting", "offscreen",
-		"webRequest", "declarativeNetRequest", "webNavigation", "storage"],
+		"webRequest", "declarativeNetRequest", "webNavigation", "storage", "nativeMessaging"],
 	"declarative_net_request": {
 		"rule_resources": [{
 			"id": "styleIntercept",
@@ -31,23 +31,6 @@
 			"matches": ["http://*/*", "https://*/*"],
 			"run_at": "document_start",
 			"js": [/*INJECT SCRIPTS*/]
-		},
-		{
-			"matches": ["https://docs.google.com/document/*"],
-			"run_at": "document_start",
-			"js": [
-				"zotero-google-docs-integration/kixAddZoteroMenu.js"
-			]
-		},
-		{
-			"matches": ["https://docs.google.com/document/*"],
-			"run_at": "document_end",
-			"js": [
-				"zotero-google-docs-integration/googleDocs.js",
-				"zotero-google-docs-integration/client.js",
-				"zotero-google-docs-integration/clientAppsScript.js",
-				"zotero-google-docs-integration/document.js"
-			]
 		}
 	],
 	"sandbox": {
@@ -71,7 +54,7 @@
 	"content_security_policy": {
 		"extension_pages": "script-src 'self'; object-src 'self'"
 	},
-	"homepage_url": "https://www.zotero.org/",
+	"homepage_url": "https://github.com/917Dhj/DeepPaperNote-Connector",
 	"icons": {
 		"16": "Icon-16.png",
 		"32": "Icon-32.png",
@@ -79,7 +62,7 @@
 		"128": "Icon-128.png"
 	},
 	"options_ui": {
-		"page": "preferences/preferences.html",
+		"page": "deeppapernote-options.html",
 		"open_in_tab": true
 	},
 	"commands": {

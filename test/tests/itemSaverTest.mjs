@@ -123,6 +123,63 @@ describe("ItemSaver", function() {
 		});
 	});
 
+	describe('DeepPaperNote save boundary', function() {
+		it('previews the final path and saves the translated PDF to the chosen domain', async function() {
+			const result = await tab.run(async function() {
+				try {
+					sinon.stub(Zotero.Prefs, 'getAsync').resolves('未分类');
+					sinon.stub(Zotero.Prefs, 'set');
+					sinon.stub(Zotero.DeepPaperNote, 'preview').resolves({
+						path: 'Research/Papers/长视频理解/Paper/Fei - 2026 - Paper.pdf'
+					});
+					sinon.stub(Zotero.DeepPaperNote, 'save').resolves({status: 'saved'});
+					sinon.stub(Zotero.ModalPrompt, 'confirm');
+					Zotero.ModalPrompt.confirm.onFirstCall().resolves({button: 1, inputText: '长视频理解'});
+					Zotero.ModalPrompt.confirm.onSecondCall().resolves({button: 1});
+
+					let itemsDone = false;
+					let attachmentProgress = [];
+					let item = {
+						itemType: 'journalArticle',
+						title: 'Paper',
+						date: '2026',
+						creators: [{creatorType: 'author', lastName: 'Fei'}],
+						attachments: [{title: 'Full Text PDF', mimeType: 'application/pdf', url: 'https://example.com/paper.pdf'}],
+					};
+					let saver = new Zotero.ItemSaver({sessionID: 'test-session'});
+					await saver.saveItems(
+						[item],
+						(attachment, progress) => attachmentProgress.push([attachment.title, progress]),
+						() => itemsDone = true
+					);
+					return {
+						domain: Zotero.DeepPaperNote.save.firstCall.args[1].domain,
+						previewPath: Zotero.ModalPrompt.confirm.secondCall.args[0].message,
+						itemsDone,
+						attachmentProgress,
+						archiveStatus: item.deepPaperNote.status,
+						referrer: item.attachments[0].referrer,
+						documentOrigin: document.location.origin,
+					};
+				}
+				finally {
+					Zotero.Prefs.getAsync.restore();
+					Zotero.Prefs.set.restore();
+					Zotero.DeepPaperNote.preview.restore();
+					Zotero.DeepPaperNote.save.restore();
+					Zotero.ModalPrompt.confirm.restore();
+				}
+			});
+
+			assert.equal(result.domain, '长视频理解');
+			assert.include(result.previewPath, 'Research/Papers/长视频理解/Paper/Fei - 2026 - Paper.pdf');
+			assert.isTrue(result.itemsDone);
+			assert.deepEqual(result.attachmentProgress, [['Full Text PDF', 0], ['Full Text PDF', 100]]);
+			assert.equal(result.archiveStatus, 'saved');
+			assert.equal(result.referrer, result.documentOrigin);
+		});
+	});
+
 	describe('_saveToServer', function() {
 		async function saveWithAutomaticTags(automaticTags) {
 			return tab.run(async function (automaticTags) {

@@ -342,6 +342,7 @@ Zotero.Prefs = new function() {
 		"downloadAssociatedFiles": true,
 		"automaticSnapshots": true, // only affects saves to zotero.org. saves to client governed by pref in the client
 		"automaticTags": true, // only affects saves to zotero.org. saves to client governed by pref in the client
+		"deepPaperNote.domain": "未分类",
 		"connector.repo.lastCheck.localTime": 0,
 		"connector.repo.lastCheck.repoTime": 0,
 		"connector.url": 'http://127.0.0.1:23119/',
@@ -349,7 +350,7 @@ Zotero.Prefs = new function() {
 		"interceptKnownFileTypes": true,
 		"allowedCSLExtensionHosts": ["^https://raw\\.githubusercontent\\.com/", "^https://gitee\\.com/.+/raw/"],
 		"allowedInterceptHosts": [],
-		"firstUse": true,
+		"firstUse": false,
 		"firstSaveToServer": true,
 		"reportTranslationFailure": true,
 		"translatorMetadata": [],

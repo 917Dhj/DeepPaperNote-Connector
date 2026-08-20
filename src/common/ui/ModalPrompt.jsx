@@ -82,7 +82,7 @@ Zotero.UI.ModalPrompt = class ModalPrompt extends React.Component {
 	}
 	
 	onInputChange(event) {
-		this.setState({inputText: event.value});
+		this.setState({inputText: event.target.value});
 	}
 	
 	render() {
@@ -141,7 +141,7 @@ Zotero.UI.ModalPrompt = class ModalPrompt extends React.Component {
 					aria-labelledby="zotero-modal-prompt-title"
 					aria-describedby="zotero-modal-prompt-message">
 				<div className="ModalPrompt-content">
-					<img className="ModalPrompt-icon" src={`../images/zotero-app-${platform}.png`} alt=""/>
+					<img className="ModalPrompt-icon" src="../Icon-64.png" alt=""/>
 					<div>
 						<h2 id="zotero-modal-prompt-title" className="ModalPrompt-title">
 							{this.props.title}
