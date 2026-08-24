@@ -1170,10 +1170,7 @@ Zotero.Proxies.Detectors.OpenAthens = function(details) {
 
 Zotero.Proxies.DNS = new function() {
 	this.getHostnames = function() {
-		return Zotero.Connector.callMethod('getClientHostnames', null).then(function(hostnames) {
-			Zotero.Proxies._clientHostnames = hostnames;
-			return hostnames;
-		});
+		return Promise.resolve([]);
 	}
 };
 

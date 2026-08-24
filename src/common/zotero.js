@@ -107,13 +107,6 @@ var Zotero = global.Zotero = new function() {
 				+ `> ${Zotero.version}; resetting for migration evaluation`);
 			lastVersion = "5.0.100";
 		}
-		// Skip first-use dialog for existing users when enabled for non-Firefox browsers
-		if (Zotero.Utilities.semverCompare(lastVersion, "5.0.87") < 0 && !this.isFirefox) {
-			Zotero.Prefs.set('firstUse', false);
-		}
-		if (Zotero.Utilities.semverCompare(lastVersion, "5.0.110") < 0) {
-			Zotero.Prefs.set('integration.googleDocs.useGoogleDocsAPI', false)
-		}
 		if (Zotero.Utilities.semverCompare(lastVersion, "5.0.168") < 0 && Zotero.isFirefox) {
 			// We were setting DNR header replacement rules on Firefox http.js without
 			// removing them, and this breaks translation sometimes
@@ -145,7 +138,6 @@ var Zotero = global.Zotero = new function() {
 					Zotero.logError(e);
 					return;
 				}
-				await Zotero.API.clearCredentials();
 				Zotero.Prefs.set('migration.resetTranslators', true);
 			}
 		}
@@ -193,37 +185,20 @@ var Zotero = global.Zotero = new function() {
 		Zotero.Messaging.init();
 		Zotero.Connector_Types.init();
 		await Zotero.Prefs.init();
-		// The Safari extension is bundled with the Zotero app, so the generic first-use prompt
-		// telling users to install Zotero is unnecessary.
-		if (Zotero.isSafari) {
-			Zotero.Prefs.set('firstUse', false);
-		}
-		
 		Zotero.Debug.init();
 		let storingDebugOnRestart = Zotero.Prefs.get('debug.store');
 		if (storingDebugOnRestart) Zotero.Debug.setStore(storingDebugOnRestart);
 		Zotero.Prefs.set('debug.store', false);
 		Zotero.WebRequestIntercept.init();
-		Zotero.ContentTypeHandler.init();
 		await Zotero.Connector_Browser.init();
 		await Zotero.i18n.init();
 		Zotero.Translators.init();
 		await Zotero.Proxies.init();
 		await this._initDateFormatsJSON();
 		Zotero.initDeferred.resolve();
-		if (Zotero.GoogleDocs.API.init) {
-			await Zotero.GoogleDocs.API.init();
-		}
 		Zotero.initialized = true;
 
 		await Zotero.migrate();
-
-		// Flush any previously-failed server-side API key revocation.
-		// Fire-and-forget: a network failure here just means we try again on
-		// the next startup (pref stays set).
-		if (Zotero.API && Zotero.API.retryPendingRevocation) {
-			Zotero.API.retryPendingRevocation().catch(e => Zotero.logError(e));
-		}
 	};
 	
 	/**
@@ -236,7 +211,6 @@ var Zotero = global.Zotero = new function() {
 		if (Zotero.isSafari) {
 			await Zotero.i18n.init();
 		}
-		Zotero.ConnectorIntegration.init();
 		Zotero.Connector_Types.init();
 		Zotero.Schema.init();
 		await this._initDateFormatsJSON();
@@ -350,8 +324,6 @@ Zotero.Prefs = new function() {
 		"interceptKnownFileTypes": true,
 		"allowedCSLExtensionHosts": ["^https://raw\\.githubusercontent\\.com/", "^https://gitee\\.com/.+/raw/"],
 		"allowedInterceptHosts": [],
-		"firstUse": false,
-		"firstSaveToServer": true,
 		"reportTranslationFailure": true,
 		"translatorMetadata": [],
 		
@@ -362,9 +334,6 @@ Zotero.Prefs = new function() {
 		"proxies.disableByDomainString": '.edu',
 		"proxies.proxies": [],
 		"proxies.loopPreventionTimestamp": 0,
-		
-		"integration.googleDocs.enabled": true,
-		"integration.googleDocs.useV2API": false,
 		
 		"shortcuts.cite": {ctrlKey: true, altKey: true, key: 'c'}
 	};

@@ -29,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Run build script
-        run: bash build.sh -p b -d
+        run: ./build.sh -d
 
       - name: Show build log on failure
         if: ${{ failure() }}
@@ -39,4 +39,7 @@ jobs:
         run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
 
       - name: Run tests
-        run: bash scripts/runtests.sh -i -f 
+        run: bash scripts/runtests.sh -i -f
+
+      - name: Run native host tests
+        run: python3 -m unittest test/native_host/test_deeppapernote_host.py

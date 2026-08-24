@@ -78,10 +78,7 @@ Zotero.Connector_Types = new function() {
 			Zotero.CachedTypes.call(this);
 			
 			this.getImageSrc = function(idOrName) {
-				var itemType = Zotero.Connector_Types["itemTypes"][idOrName];
-				var icon = itemType ? itemType[6]/* icon */ : "treeitem-"+idOrName+".png";
-				
-				return Zotero.getExtensionURL("images/" + icon);
+				return Zotero.getExtensionURL('Icon-32.png');
 			};
 		}
 		

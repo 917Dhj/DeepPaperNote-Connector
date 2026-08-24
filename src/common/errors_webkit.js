@@ -94,9 +94,6 @@ Zotero.Errors = new function() {
 		}
 		
 		info.appName = Zotero.appName;
-		info.zoteroAvailable = !!(await Zotero.Connector.checkIsOnline());
-		
-		
 		// No management permission in Safari
 		if (Zotero.isBackground && !Zotero.isSafari) {
 			let granted = await browser.permissions.contains({permissions: ['management']});

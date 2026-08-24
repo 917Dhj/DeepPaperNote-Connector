@@ -90,8 +90,6 @@ Zotero.Inject = {
 		this._addMessageListeners();
 		this._addZoteroButtonElementListener();
 		
-		this._handleOAuthComplete()
-
 		if(document.readyState !== "complete") {
 			window.addEventListener("pageshow", function(e) {
 				if(e.target !== document) return;
@@ -102,17 +100,6 @@ Zotero.Inject = {
 		}	
 	},
 
-	/**
-	 * Call OAuth complete listeners if on the relevant URL
-	 */
-	_handleOAuthComplete() {
-		if(document.location.href.substr(0, ZOTERO_CONFIG.OAUTH.ZOTERO.CALLBACK_URL.length+1) === ZOTERO_CONFIG.OAUTH.ZOTERO.CALLBACK_URL+"?") {
-			Zotero.API.onAuthorizationComplete(document.location.href.substr(ZOTERO_CONFIG.OAUTH.ZOTERO.CALLBACK_URL.length+1));
-		} else if (document.location.href.substr(0, ZOTERO_CONFIG.OAUTH.ZOTERO.CALLBACK_URL.length+1) === ZOTERO_CONFIG.OAUTH.GOOGLE_DOCS.CALLBACK_URL+"#") {
-			Zotero.GoogleDocs_API.onAuthComplete(document.location.href);
-		}
-	},
-	
 	_addMessageListeners() {
 		// add listener for translate message from background page
 		Zotero.Messaging.addMessageListener("translate", function(data) {
@@ -133,14 +120,6 @@ Zotero.Inject = {
 		Zotero.Messaging.addMessageListener('historyChanged', Zotero.Utilities.debounce(function() {
 			Zotero.PageSaving.onPageLoad(true);
 		}, 1000));
-
-		Zotero.Messaging.addMessageListener("firstUse", function () {
-			return Zotero.Inject.firstUsePrompt();
-		});
-
-		Zotero.Messaging.addMessageListener("expiredBetaBuild", function () {
-			return Zotero.Inject.expiredBetaBuildPrompt();
-		});
 
 		// Cannot copy to clipboard in the background page
 		Zotero.Messaging.addMessageListener("clipboardWrite", function (text) {
@@ -261,145 +240,6 @@ Zotero.Inject = {
 			lastChainedPromise = lastChainedPromise.then(showNotificationPrompt);
 			return lastChainedPromise;
 		}
-	},
-	
-	async expiredBetaBuildPrompt() {
-		return this.confirm({
-			title: "Build Expired",
-			button1Text: "OK",
-			button2Text: "",
-			message: `This Zotero Connector beta build has expired. Please download the latest version from zotero.org.`
-		});
-	},
-
-	async firstUsePrompt() {
-		var clientName = ZOTERO_CONFIG.CLIENT_NAME;
-		return this.confirm({
-			title: Zotero.getString('firstRun_title', clientName),
-			button1Text: Zotero.getString('firstRun_acceptButton'),
-			button2Text: "",
-			message: Zotero.getString(
-					'firstRun_text1',
-					[
-						clientName,
-						"https://www.zotero.org/support/adding_items_to_zotero"
-					]
-				)
-				+ '<br><br>'
-				+ Zotero.getString(
-					'firstRun_text2',
-					[
-						clientName,
-						// TODO: Make download URL configurable (instead of just base URL + "download")
-						ZOTERO_CONFIG.WWW_BASE_URL + "download/"
-					]
-				)
-		});
-	},
-	
-	/**
-	 * @param {Boolean} localhostDenied - Zotero is unreachable because Safari denies the
-	 *     Connector access to 127.0.0.1, rather than because Zotero isn't running
-	 */
-	async firstSaveToServerPrompt(localhostDenied=false) {
-		var clientName = ZOTERO_CONFIG.CLIENT_NAME;
-		
-		let title, message;
-		if (localhostDenied) {
-			title = Zotero.getString('permissions_siteAccess_title');
-			message = Zotero.getString('permissions_siteAccess_message_localhost_required')
-				+ Zotero.getString(
-					'permissions_siteAccess_message_domain_safari',
-					[Zotero.getString('appConnector', clientName), '<b>127.0.0.1</b>']
-				)
-				+ Zotero.getString(
-					'permissions_siteAccess_message_saveToServer',
-					[Zotero.getString('appConnector', clientName), ZOTERO_CONFIG.DOMAIN_NAME]
-				);
-		}
-		else {
-			title = Zotero.getString('error_connection_isAppRunning', clientName);
-			message = Zotero.getString(
-					'error_connection_save',
-					[
-						Zotero.getString('appConnector', clientName),
-						clientName,
-						ZOTERO_CONFIG.DOMAIN_NAME
-					]
-				)
-				+ '<br /><br />'
-				+ Zotero.Inject.getConnectionErrorTroubleshootingString();
-		}
-		var result = await this.confirm({
-			button1Text: Zotero.getString('general_tryAgain'),
-			button2Text: Zotero.getString('general_cancel'),
-			button3Text: Zotero.getString('error_connection_enableSavingToOnlineLibrary'),
-			title,
-			message
-		});
-		
-		switch (result.button) {
-			case 1:
-				return 'retry';
-			
-			case 3:
-				return 'server';
-			
-			default:
-				return 'cancel';
-		}
-	},
-	
-	getConnectionErrorTroubleshootingString() {
-		var clientName = ZOTERO_CONFIG.CLIENT_NAME;
-		var connectorName = Zotero.getString('appConnector', ZOTERO_CONFIG.CLIENT_NAME);
-		var downloadLink = 'https://www.zotero.org/download/';
-		var troubleshootLink = 'https://www.zotero.org/support/kb/connector_zotero_unavailable';
-		return Zotero.getString(
-			'error_connection_downloadOrTroubleshoot',
-			[downloadLink, clientName, troubleshootLink]
-		);
-	},
-	
-	/**
-	 * If Zotero is offline and attempting action fallback to zotero.org for first time: prompts about it
-	 * Prompt only available on BrowserExt which supports programmatic injection
-	 * Otherwise just resolves to true
-	 *
-	 * @param {Boolean} permissionPromptShown - Skip the localhost permission explanation before
-	 *     the status check, e.g., on a retry after it has already been displayed
-	 * return {Promise<Boolean>} whether the action should proceed
-	 */
-	async checkActionToServer(permissionPromptShown=false) {
-		var [firstSaveToServer, zoteroIsOnline] = await Zotero.Promise.all([
-			Zotero.Prefs.getAsync('firstSaveToServer'),
-			Zotero.Connector.checkIsOnline({active: true, permissionPromptShown})
-		]);
-		if (zoteroIsOnline) {
-			return true;
-		}
-		// null means Safari blocked the localhost request, leaving Zotero's status unknown
-		let localhostDenied = zoteroIsOnline === null;
-		if (!localhostDenied && Zotero.isSafari) {
-			await Zotero.HostPermissions.prompt({
-				domains: ['repo.zotero.org', 'api.zotero.org']
-			});
-		}
-		if (!firstSaveToServer) {
-			return true;
-		}
-		var result = await this.firstSaveToServerPrompt(localhostDenied);
-		if (result == 'server') {
-			Zotero.Prefs.set('firstSaveToServer', false);
-			return true;
-		}
-		else if (result == 'retry') {
-			// If we perform the retry immediately and Zotero is still unavailable the prompt returns instantly
-			// making the user interaction confusing so we wait a bit first
-			await Zotero.Promise.delay(500);
-			return this.checkActionToServer(true);
-		}
-		return false;
 	},
 	
 	addKeyboardShortcut(eventDescriptor, fn, elem) {

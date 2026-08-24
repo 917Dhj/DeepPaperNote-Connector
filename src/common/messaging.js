@@ -175,8 +175,7 @@ Zotero.Messaging = new function() {
 	 */
 	this.init = function() {
 		browser.runtime.onMessage.addListener(function(request, sender) {
-			// All Zotero messages are arrays so we ignore everything else
-			// SingleFile will pass an object in the message so this ignores those.
+			// Connector messages are arrays; ignore unrelated extension messages.
 			if (!Array.isArray(request)) {
 				return;
 			}

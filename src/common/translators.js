@@ -184,23 +184,8 @@ Zotero.Translators = new function() {
 	}
 
 	this._doUpdateFromRemote = async function(reset) {
-		Zotero.debug('Retrieving translators from Zotero Client');
-		let translatorMetadata;
-		try {
-			translatorMetadata = await Zotero.Repo.getTranslatorMetadataFromZotero();
-			return this.loadNewMetadata(translatorMetadata, reset, false)
-		}
-		catch (e) {
-			Zotero.debug('Failed to retrieve translators from Zotero Client, attempting Repo');
-			try {
-				translatorMetadata = await Zotero.Repo.getTranslatorMetadataFromServer(reset);
-				return this.loadNewMetadata(translatorMetadata, reset, true)
-			}
-			catch (e) {
-				Zotero.logError('Failed to retrieve translators from Zotero Client and Zotero Repo ' + e);
-				throw e;
-			}	
-		}
+		let translatorMetadata = await Zotero.Repo.getTranslatorMetadataFromServer(reset);
+		return this.loadNewMetadata(translatorMetadata, reset, true);
 	}
 
 	/**

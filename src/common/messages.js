@@ -136,35 +136,6 @@ var MESSAGES = {
 		},
 		setStore: false
 	},
-	Connector: {
-		checkIsOnline: {
-			background: {minArgs: 1}
-		},
-		callMethod: true,
-		saveSingleFile: {
-			inject: {
-				preSend: async function(args) {
-					if (Zotero.isChromium) {
-						args[1].snapshotContent = await Zotero.Messaging.sendAsChunks(args[1].snapshotContent);
-					}
-					return args;
-				},
-			},
-			background: {
-				postReceive: async function(args) {
-					if (Zotero.isChromium) {
-						args[1].snapshotContent = Zotero.Messaging.getChunkedPayload(args[1].snapshotContent);
-					}
-					return args;
-				}
-			}
-		},
-		getClientVersion: {
-			background: {minArgs: 1}
-		},
-		reportActiveURL: false,
-		getPref: true
-	},
 	HostPermissions: {
 		onPageLoad: true,
 		prompt: true,
@@ -183,12 +154,10 @@ var MESSAGES = {
 		onZoteroButtonElementClick: true,
 		onHistoryStateUpdated: false,
 		injectScripts: true,
-		injectSingleFile: true,
 		isIncognito: true,
 		isTabFocused: true,
 		newerVersionRequiredPrompt: true,
 		openTab: false,
-		openConfigEditor: false,
 		openPreferences: false,
 		bringToFront: true
 	},
@@ -196,35 +165,6 @@ var MESSAGES = {
 		storing: true,
 		get: true,
 		count: true,
-	},
-	ItemSaver: {
-		saveAttachmentToZotero: true,
-		saveStandaloneAttachmentToZotero: true,
-		saveAttachmentToServer: {
-			inject: {
-				preSend: async function(args) {
-					if (Zotero.isChromium) {
-						let attachment = args[0];
-						if (typeof attachment.data === 'string' && attachment.mimeType === 'text/html') {
-							attachment.data = await Zotero.Messaging.sendAsChunks(attachment.data);
-						}
-					}
-					return args;
-				},
-			},
-			background: {
-				postReceive: async function(args, tab) {
-					if (Zotero.isChromium) {
-						let attachment = args[0];
-						if (typeof attachment.data === 'string' && attachment.mimeType === 'text/html') {
-							attachment.data = Zotero.Messaging.getChunkedPayload(attachment.data);
-						}
-					}
-					args.push(tab);
-					return args;
-				}
-			}
-		}
 	},
 	DeepPaperNote: {
 		listDomains: true,
@@ -263,35 +203,6 @@ var MESSAGES = {
 		},
 		receiveChunk: true
 	},
-	API: {
-		authorize: true,
-		onAuthorizationComplete: false,
-		clearCredentials: false,
-		getUserInfo: true,
-		run: true,
-		uploadAttachment: {
-			inject: {
-				preSend: async function(args) {
-					args[0].data = packArrayBuffer(args[0].data);
-					return args;
-				}
-			},
-			background: {
-				postReceive: async function(args) {
-					args[0].data = await unpackArrayBuffer(args[0].data);
-					return args;
-				}
-			}
-		}
-	},
-	GoogleDocs_API: {
-		onAuthComplete: false,
-		run: {
-			background: {minArgs: 3}
-		},
-		getDocument: true,
-		batchUpdateDocument: true
-	},
 	Prefs: {
 		set: {background: {preSend: () => true}},
 		getAll: true,
@@ -309,12 +220,6 @@ var MESSAGES = {
 	},
 	WebRequestIntercept: {
 		replaceUserAgent: true,
-	},
-	ContentTypeHandler: {
-		handleImportableStyle: true,
-		handleImportableContent: true,
-		enable: false,
-		disable: false,
 	}
 };
 

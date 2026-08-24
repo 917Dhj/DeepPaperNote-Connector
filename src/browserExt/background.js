@@ -33,15 +33,10 @@ Zotero.Connector_Browser = new function() {
 	var _injectTranslationScripts = [
 		/*INJECT SCRIPTS*/
 	];
-	// Default: February 1, 2053 (so we don't have to deal with this when developing)
-	var _betaBuildExpiration = new Date(2053, 0, 1, 0, 0, 0);
-	var _isBetaBuildBeyondExpiration = false;
 	this._tabInfo = _tabInfo;
 	let buttonContext = ['browser_action'];
 	
-	// Set true for long-running tasks like a Google Docs integration HTTP request to Zotero
-	// where MV3 otherwise would kill the service worker and break the integration session
-	// requiring a Zotero restart
+	// Keep MV3 alive while long-running download or interception work is active.
 	this._keepServiceWorkerAlive = 0;
 	
 	this.shouldKeepServiceWorkerAlive = () => this._keepServiceWorkerAlive;
@@ -70,8 +65,6 @@ Zotero.Connector_Browser = new function() {
 					}
 				}
 			}, 15 * 60e3);
-			this.isDev = (await browser.management.getSelf()).installType === 'development';
-			_isBetaBuildBeyondExpiration = this.isDev && new Date > _betaBuildExpiration;
 		}
 	}
 	
@@ -241,9 +234,7 @@ Zotero.Connector_Browser = new function() {
 	 * Called when Zotero goes online or offline
 	 * @param [String|Boolean] version - either `false` or version string from X-Zotero-Version header
 	 */
-	this.onStateChange = function() {
-		Zotero.ContentTypeHandler.disable();
-	}
+	this.onStateChange = function() {};
 	
 	this.onTabActivated = function(tab) {
 		Zotero.Connector_Browser._updateExtensionUI(tab);
@@ -475,14 +466,6 @@ Zotero.Connector_Browser = new function() {
 		}
 	};
 
-	this.injectSingleFile = async function(tab, frameId) {
-		Zotero.debug("SingleFile: injecting SingleFile into page");
-		const singleFileScripts = ["lib/SingleFile/single-file-bootstrap.js", "lib/SingleFile/single-file.js"]
-		await this.injectScripts(singleFileScripts, tab, frameId)
-		// Also inject the config object
-		await this.injectScripts('singlefile-config.js', tab, frameId);
-	};
-	
 	this.openWindow = async function(url, options={}, tab=null) {
 		if (!tab) {
 			tab = await getCurrentTab();
@@ -553,10 +536,6 @@ Zotero.Connector_Browser = new function() {
 		this.openTab(browser.runtime.getURL('deeppapernote-options.html'), tab);
 	};
 	
-	this.openConfigEditor = function(tab) {
-		this.openTab(browser.runtime.getURL(`preferences/config.html`), tab);
-	};
-	
 	this.waitForTabToLoad = async function(tab) {
 		if (typeof tab === 'number') {
 			tab = await browser.tabs.get(tab);
@@ -624,7 +603,6 @@ Zotero.Connector_Browser = new function() {
 		if (!tab) {
 			tab = await getCurrentTab();
 		}
-		if (Zotero.Prefs.get('firstUse') || _isBetaBuildBeyondExpiration) return _showMessageButton(tab);
 		if (!tab.active || tab.id < 0) return;
 		let url = tab.url || tab.pendingUrl;
 		if (!url) {
@@ -915,20 +893,6 @@ Zotero.Connector_Browser = new function() {
 		});
 	}
 	
-
-	function _showMessageButton(tab) {
-		var icon = `${Zotero.platform}/zotero-z-32px-australis.png`;
-		browser.action.setIcon({
-			tabId: tab.id,
-			path: `images/${icon}`
-		});
-		browser.action.setTitle({
-			tabId: tab.id,
-			title: "DeepPaperNote Connector"
-		});
-		browser.action.enable(tab.id);
-	}
-	
 	/**
 	 * Removes information about a specific tab
 	 */
@@ -1011,33 +975,11 @@ Zotero.Connector_Browser = new function() {
 		}
 
 		let tabInfo = Zotero.Connector_Browser.getTabInfo(tab.id);
-		if (_isBetaBuildBeyondExpiration) {
-			Zotero.Messaging.sendMessage('expiredBetaBuild')
-		}
-		else if (Zotero.Prefs.get('firstUse')) {
-			Zotero.Messaging.sendMessage("firstUse", null, tab)
-			.then(function () {
-				Zotero.Prefs.set('firstUse', false);
-				Zotero.Connector_Browser._updateExtensionUI(tab);
-			});
-		}
-		else if(tabInfo.translators && tabInfo.translators.length) {
+		if(tabInfo.translators && tabInfo.translators.length) {
 			Zotero.Connector_Browser.saveWithTranslator(tab, 0, {fallbackOnFailure: true});
 		}
-		else {
-			if (tabInfo.isPDF) {
-				Zotero.Connector_Browser.saveAsWebpage(
-					tab,
-					tabInfo.frameId,
-					{
-						snapshot: true
-					}
-				);
-			} else {
-				let withSnapshot = Zotero.Connector.isOnline ? Zotero.Connector.prefs.automaticSnapshots :
-					Zotero.Prefs.get('automaticSnapshots');
-				Zotero.Connector_Browser.saveAsWebpage(tab, 0, { snapshot: withSnapshot });
-			}
+		else if (tabInfo.isPDF) {
+			Zotero.Connector_Browser.saveAsWebpage(tab, tabInfo.frameId);
 		}
 	}
 
@@ -1163,7 +1105,6 @@ Zotero.Connector_Browser = new function() {
 		_updateInfoForTab(details.tabId, details.url);
 		if (!tab) tab = await browser.tabs.get(details.tabId);
 		Zotero.Connector_Browser._updateExtensionUI(tab);
-		Zotero.Connector.reportActiveURL(tab.url);
 		
 		if (historyChange) {
 			Zotero.Messaging.sendMessage('historyChanged');
@@ -1192,7 +1133,6 @@ Zotero.Connector_Browser = new function() {
 		if (url.indexOf(browser.runtime.getURL("itemSelector/itemSelector.html")) === 0) return;
 		Zotero.debug("Connector_Browser: onActivated for " + url);
 		Zotero.Connector_Browser.onTabActivated(tab);
-		Zotero.Connector.reportActiveURL(url);
 	})));
 	
 	browser.webNavigation.onCommitted.addListener(waitForInit(logListenerErrors(onNavigation)));
