@@ -227,6 +227,7 @@ var MESSAGES = {
 		}
 	},
 	DeepPaperNote: {
+		listDomains: true,
 		preview: true,
 		save: true,
 	},
@@ -292,7 +293,7 @@ var MESSAGES = {
 		batchUpdateDocument: true
 	},
 	Prefs: {
-		set: false,
+		set: {background: {preSend: () => true}},
 		getAll: true,
 		getDefault: true,
 		getAsync: true,

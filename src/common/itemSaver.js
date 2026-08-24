@@ -98,19 +98,33 @@ ItemSaver.prototype = {
 				attachment.snapshot !== false && attachment.mimeType?.toLowerCase() === 'application/pdf'
 			);
 			if (pdfs.length !== 1) {
-				throw new Error(`DeepPaperNote requires exactly one PDF attachment; found ${pdfs.length}`);
+				let error = new Error(`DeepPaperNote requires exactly one PDF attachment; found ${pdfs.length}`);
+				await Zotero.DeepPaperNotePanel.showError(error, item);
+				throw error;
 			}
 			let attachment = pdfs[0];
 			this._setAttachmentReferer(attachment);
-			let overrides = await this._confirmDeepPaperNoteArchive(item);
+			let overrides;
+			try {
+				overrides = await this._confirmDeepPaperNoteArchive(item);
+			}
+			catch (error) {
+				if (error.code !== 'cancelled') {
+					await Zotero.DeepPaperNotePanel.showError(error, item);
+				}
+				throw error;
+			}
 			attachment.id = attachment.id || Zotero.Utilities.randomString(8);
 			attachmentCallback(attachment, 0);
+			Zotero.DeepPaperNotePanel.update({status: 'saving', statusText: 'Saving PDF…'});
 			try {
 				item.deepPaperNote = await Zotero.DeepPaperNote.save(item, overrides);
 				attachmentCallback(attachment, 100);
+				Zotero.DeepPaperNotePanel.complete(item.deepPaperNote);
 			}
 			catch (error) {
 				attachmentCallback(attachment, false, error);
+				Zotero.DeepPaperNotePanel.fail(error);
 				throw error;
 			}
 		}
@@ -118,61 +132,36 @@ ItemSaver.prototype = {
 		return items;
 	},
 
-	_promptDeepPaperNoteInput: async function(title, message, inputText) {
-		let result = await Zotero.ModalPrompt.confirm({
-			title,
-			message,
-			input: true,
-			inputText,
-			button1Text: 'Continue',
-			button2Text: 'Cancel',
-		});
-		if (result.button !== 1) throw new Error('DeepPaperNote save cancelled');
-		let value = (result.inputText || '').trim();
-		if (!value) throw new Error(`${title} is required`);
-		return value;
-	},
-
 	_confirmDeepPaperNoteArchive: async function(item) {
-		let overrides = {};
-		if (this._promptForMetadata || !item.title?.trim()) {
-			overrides.title = await this._promptDeepPaperNoteInput(
-				'Paper title', 'Confirm the paper title.', item.title || ''
-			);
-		}
 		let authors = (item.creators || []).filter(creator =>
 			creator.creatorType === 'author' && (creator.lastName || creator.name)
 		);
-		if (!authors.length) {
-			overrides.authorShortName = await this._promptDeepPaperNoteInput(
-				'Author', 'Enter the short author name used in the PDF filename.', ''
-			);
-		}
 		let year = `${item.date || ''}`.match(/(?:19|20)\d{2}/)?.[0] || '';
-		if (!year) {
-			overrides.year = await this._promptDeepPaperNoteInput(
-				'Publication year', 'Enter a four-digit publication year.', ''
-			);
+		let domains = await Zotero.DeepPaperNote.listDomains();
+		if (!domains.length) throw new Error('No domain folders found in Research/Papers');
+		let savedDomain = await Zotero.Prefs.getAsync('deepPaperNote.domain').catch(() => '');
+		let values = {
+			title: item.title || '',
+			authorShortName: '',
+			year,
+			domain: domains.includes(savedDomain) ? savedDomain : domains[0],
+		};
+		let preview = null;
+		if (values.title.trim() && authors.length && year) {
+			preview = await Zotero.DeepPaperNote.preview(item, values);
 		}
-
-		let domain = await Zotero.Prefs.getAsync('deepPaperNote.domain').catch(() => '未分类');
-		domain = await this._promptDeepPaperNoteInput(
-			'DeepPaperNote domain',
-			`Title: ${overrides.title || item.title}<br>`
-				+ `Author: ${overrides.authorShortName || authors.map(author => author.lastName || author.name).join(', ')}<br>`
-				+ `Year: ${overrides.year || year}`,
-			domain || '未分类'
-		);
-		overrides.domain = domain;
-		let preview = await Zotero.DeepPaperNote.preview(item, overrides);
-		let confirmed = await Zotero.ModalPrompt.confirm({
-			title: 'Save to DeepPaperNote',
-			message: `Final path:<br>${preview.path}`,
-			button1Text: 'Save PDF',
-			button2Text: 'Cancel',
-		});
-		if (confirmed.button !== 1) throw new Error('DeepPaperNote save cancelled');
-		Zotero.Prefs.set('deepPaperNote.domain', domain);
+		let overrides = await Zotero.DeepPaperNotePanel.open({
+			values,
+			domains,
+			authors: authors.map(author => author.lastName || author.name),
+			editableMetadata: this._promptForMetadata || !item.title?.trim() || !authors.length || !year,
+			previewPath: preview?.path || '',
+			previewError: '',
+			previewLoading: false,
+			status: 'confirm',
+			statusText: '',
+		}, updatedValues => Zotero.DeepPaperNote.preview(item, updatedValues));
+		await Zotero.Prefs.set('deepPaperNote.domain', overrides.domain);
 		return overrides;
 	},
 	

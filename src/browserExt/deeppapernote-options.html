@@ -13,7 +13,7 @@
 		h1 { margin: 0; font-size: 1.65rem; }
 		p { margin: 4px 0 0; color: GrayText; }
 		label { display: block; font-weight: 600; margin-bottom: 8px; }
-		input { box-sizing: border-box; width: 100%; padding: 10px 12px; font: inherit; }
+		select { box-sizing: border-box; width: 100%; padding: 10px 12px; font: inherit; }
 		.actions { display: flex; gap: 10px; margin-top: 16px; }
 		button { padding: 9px 14px; font: inherit; cursor: pointer; }
 		#status { min-height: 1.5em; margin-top: 18px; color: CanvasText; }
@@ -27,7 +27,9 @@
 			<div><h1>DeepPaperNote Connector</h1><p>PDF-only archive settings</p></div>
 		</header>
 		<label for="domain">Default research domain</label>
-		<input id="domain" name="domain" autocomplete="off" maxlength="80">
+		<select id="domain" name="domain" disabled>
+			<option>Loading domains…</option>
+		</select>
 		<div class="actions">
 			<button id="save" type="button">Save</button>
 			<button id="check" type="button">Check native host</button>

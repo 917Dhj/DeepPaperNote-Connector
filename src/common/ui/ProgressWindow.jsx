@@ -105,6 +105,10 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 		this.updateSelectedTags = this.updateSelectedTags.bind(this);
 		this.onTagAutocompleteShown = this.onTagAutocompleteShown.bind(this);
 		this.sendUpdate	= this.sendUpdate.bind(this);
+		this.onDeepPaperNoteInput = this.onDeepPaperNoteInput.bind(this);
+		this.notifyDeepPaperNoteChanged = this.notifyDeepPaperNoteChanged.bind(this);
+		this.submitDeepPaperNote = this.submitDeepPaperNote.bind(this);
+		this.cancelDeepPaperNote = this.cancelDeepPaperNote.bind(this);
 	}
 	
 	getInitialState() {
@@ -117,7 +121,8 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 			errors: [],
 			note: "",
 			selectedTags: new Set(),
-			extraHeightForTagAutocomplete: 0
+			extraHeightForTagAutocomplete: 0,
+			deepPaperNote: null
 		};
 	}
 	
@@ -129,6 +134,12 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 		this.addMessageListener('progressWindowIframe.hidden', this.handleHidden.bind(this));
 		this.addMessageListener('progressWindowIframe.reset', () => this.setState(this.getInitialState()));
 		this.addMessageListener('progressWindowIframe.willHide', this.handleHiding.bind(this));
+		this.addMessageListener('progressWindowIframe.showDeepPaperNote', data => {
+			this.setState({deepPaperNote: data});
+		});
+		this.addMessageListener('progressWindowIframe.updateDeepPaperNote', data => {
+			this.setState(state => ({deepPaperNote: {...state.deepPaperNote, ...data}}));
+		});
 		
 		document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
 		
@@ -137,7 +148,7 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 		
 		this.sendMessage('registered');
 		
-		document.querySelector("#progress-window").setAttribute("aria-label", Zotero.getString('general_saveTo', 'Zotero'));
+		document.querySelector("#progress-window").setAttribute("aria-label", 'Save to DeepPaperNote');
 		Zotero.Connector.getPref('canUserAddNote').then(res => {
 			this.canUserAddNote = res;
 		});
@@ -565,6 +576,10 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 		}
 	}
 	handleKeyDown(event) {
+		if (this.state.deepPaperNote) {
+			if (event.key == 'Escape') this.cancelDeepPaperNote();
+			return;
+		}
 		if (event.target.classList.contains("ProgressWindow-filterInput")) {
 			// Escape from a non-empty collections filter just clears it 
 			if (event.key == 'Escape' && event.target.value.length > 0) {
@@ -601,6 +616,7 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 	}
 	
 	handleKeyPress(event) {
+		if (this.state.deepPaperNote) return;
 		if (event.altKey || event.ctrlKey || event.metaKey) return;
 		
 		if (event.key == 'Enter') {
@@ -662,6 +678,94 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 	handleDone() {
 		//this.headlineSelectNode.current.focus();
 		this.sendMessage('close');
+	}
+
+	onDeepPaperNoteInput(event) {
+		let {name, value} = event.target;
+		this.setState(state => ({
+			deepPaperNote: {
+				...state.deepPaperNote,
+				values: {...state.deepPaperNote.values, [name]: value},
+			}
+		}), () => {
+			if (name == 'domain') this.notifyDeepPaperNoteChanged();
+		});
+	}
+
+	notifyDeepPaperNoteChanged() {
+		this.sendMessage('deepPaperNoteChanged', this.state.deepPaperNote.values);
+	}
+
+	submitDeepPaperNote() {
+		this.setState(state => ({
+			deepPaperNote: {...state.deepPaperNote, status: 'saving', statusText: 'Saving PDF…'}
+		}));
+		this.sendMessage('deepPaperNoteSubmit', this.state.deepPaperNote.values);
+	}
+
+	cancelDeepPaperNote() {
+		this.sendMessage('deepPaperNoteCancel');
+	}
+
+	renderDeepPaperNote() {
+		let data = this.state.deepPaperNote;
+		let values = data.values;
+		let busy = data.status == 'saving' || data.status == 'saved';
+		let complete = values.title.trim()
+			&& (values.authorShortName.trim() || data.authors.length)
+			&& /^(?:19|20)\d{2}$/.test(values.year)
+			&& values.domain
+			&& data.previewPath
+			&& !data.previewLoading
+			&& !data.previewError;
+		return (
+			<div className="DeepPaperNote-panel">
+				<div className="DeepPaperNote-headline">Save to DeepPaperNote</div>
+				<div className="DeepPaperNote-row DeepPaperNote-pdfRow">
+					<img src={Zotero.getExtensionURL('images/pdf.png')} alt=""/>
+					<span title={values.title}>{values.title || 'Untitled PDF'}</span>
+				</div>
+				{data.editableMetadata ? <React.Fragment>
+					<label className="DeepPaperNote-field">Title
+						<input name="title" value={values.title} onChange={this.onDeepPaperNoteInput}
+							onBlur={this.notifyDeepPaperNoteChanged}/>
+					</label>
+					<label className="DeepPaperNote-field">Author
+						<input name="authorShortName" value={values.authorShortName}
+							onChange={this.onDeepPaperNoteInput} onBlur={this.notifyDeepPaperNoteChanged}/>
+					</label>
+					<label className="DeepPaperNote-field">Year
+						<input name="year" inputMode="numeric" maxLength="4" value={values.year}
+							onChange={this.onDeepPaperNoteInput} onBlur={this.notifyDeepPaperNoteChanged}/>
+					</label>
+				</React.Fragment> : <div className="DeepPaperNote-metadata">
+					<div><strong>Author:</strong> {data.authors.join(', ')}</div>
+					<div><strong>Year:</strong> {values.year}</div>
+				</div>}
+				<label className="DeepPaperNote-field">Domain
+					<select name="domain" value={values.domain} onChange={this.onDeepPaperNoteInput} disabled={busy}>
+						{data.domains.map(domain => <option key={domain} value={domain}>{domain}</option>)}
+					</select>
+				</label>
+				<div className="DeepPaperNote-path">
+					<strong>Final path</strong>
+					<div>{data.previewLoading ? 'Checking path…' : data.previewPath || data.previewError}</div>
+				</div>
+				{data.statusText && <div className={`DeepPaperNote-status is-${data.status}`}
+						role={data.status == 'error' ? 'alert' : 'status'} aria-live="polite">
+					{data.statusText}
+				</div>}
+				<div className="DeepPaperNote-actions">
+					<button onClick={this.cancelDeepPaperNote} disabled={busy && data.status != 'saved'}>
+						{data.status == 'saved' || data.status == 'error' ? 'Close' : 'Cancel'}
+					</button>
+					{data.status != 'saved' && data.status != 'error' &&
+						<button className="is-primary" onClick={this.submitDeepPaperNote} disabled={!complete || busy}>
+							Save PDF
+						</button>}
+				</div>
+			</div>
+		);
 	}
 	
 	//
@@ -1081,10 +1185,12 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 					onClick={this.handleUserInteraction}
 					onKeyDown={this.handleKeyDown}
 					onKeyPress={this.handleKeyPress}>
-				{this.renderHeadline()}
-				{this.renderTargetSelector()}
-				{this.renderProgress()}
-				{this.renderErrors()}
+				{this.state.deepPaperNote ? this.renderDeepPaperNote() : <React.Fragment>
+					{this.renderHeadline()}
+					{this.renderTargetSelector()}
+					{this.renderProgress()}
+					{this.renderErrors()}
+				</React.Fragment>}
 			</div>
 		);
 	}

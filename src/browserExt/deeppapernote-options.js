@@ -5,15 +5,41 @@ const status = document.querySelector('#status');
 
 document.querySelector('#extension-id').textContent = browser.runtime.id;
 
-browser.storage.local.get(DOMAIN_PREF).then(prefs => {
-	domainInput.value = prefs[DOMAIN_PREF] || '未分类';
+function getPref() {
+	return browser.runtime.sendMessage(['Prefs.getAsync', [DOMAIN_PREF]]);
+}
+
+function setPref(value) {
+	return browser.runtime.sendMessage(['Prefs.set', [DOMAIN_PREF, value]]);
+}
+
+async function loadDomains() {
+	let [response, savedDomain] = await Promise.all([
+		browser.runtime.sendNativeMessage(HOST_NAME, {type: 'list_domains', version: 1}),
+		getPref(),
+	]);
+	if (!response?.ok) throw new Error(response?.error?.message || 'Native host did not respond');
+	domainInput.replaceChildren(...response.domains.map(domain => new Option(domain, domain)));
+	domainInput.disabled = response.domains.length === 0;
+	if (!response.domains.length) {
+		status.textContent = 'No domain folders found in Research/Papers.';
+		return;
+	}
+	domainInput.value = response.domains.includes(savedDomain) ? savedDomain : response.domains[0];
+}
+
+loadDomains().catch(error => {
+	domainInput.replaceChildren(new Option('Domains unavailable', ''));
+	status.textContent = `Could not load domains: ${error.message}`;
 });
 
-document.querySelector('#save').addEventListener('click', async () => {
-	let domain = domainInput.value.trim() || '未分类';
-	domainInput.value = domain;
-	await browser.storage.local.set({[DOMAIN_PREF]: domain});
+document.querySelector('#save').addEventListener('click', () => {
+	let domain = domainInput.value;
+	if (!domain) return;
 	status.textContent = 'Default domain saved.';
+	setPref(domain).catch(error => {
+		status.textContent = `Could not save default domain: ${error.message}`;
+	});
 });
 
 document.querySelector('#check').addEventListener('click', async () => {
@@ -26,7 +52,7 @@ document.querySelector('#check').addEventListener('click', async () => {
 				title: 'Connection Test',
 				creators: [{creatorType: 'author', lastName: 'DeepPaperNote'}],
 				date: String(new Date().getFullYear()),
-				domain: domainInput.value.trim() || '未分类',
+				domain: domainInput.value,
 			},
 		});
 		if (!response?.ok) throw new Error(response?.error?.message || 'Native host did not respond');

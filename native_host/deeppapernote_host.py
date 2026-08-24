@@ -153,11 +153,33 @@ class ArchiveStore:
         except ValueError as exc:
             raise ProtocolError("Unsafe papers_dir: path escapes the vault") from exc
 
+    def _domain_path(self, value: object) -> Path:
+        domain = _safe_segment(str(value or ""), "domain")
+        path = self.papers_root / domain
+        if path.is_symlink() or not path.is_dir():
+            raise ProtocolError("Domain directory does not exist")
+        try:
+            path.resolve().relative_to(self.papers_root.resolve())
+        except ValueError as exc:
+            raise ProtocolError("Unsafe domain: path escapes papers_dir") from exc
+        return path
+
+    def _list_domains(self) -> dict:
+        self._require_papers_root_within_vault()
+        if not self.papers_root.is_dir():
+            return {"ok": True, "domains": []}
+        domains = [
+            path.name
+            for path in self.papers_root.iterdir()
+            if not path.name.startswith(".") and not path.is_symlink() and path.is_dir()
+        ]
+        return {"ok": True, "domains": sorted(domains, key=str.casefold)}
+
     def _archive_path(self, item: dict) -> Path:
-        domain = _safe_segment(str(item.get("domain") or ""), "domain")
+        domain_path = self._domain_path(item.get("domain"))
         title = _canonical_title(item.get("title"))
         filename = f"{_author_short_name(item)} - {_year(item)} - {title}.pdf"
-        target = self.papers_root / domain / _slugify(title) / filename
+        target = domain_path / _slugify(title) / filename
         try:
             target.resolve().relative_to(self.papers_root.resolve())
         except ValueError as exc:
@@ -191,11 +213,10 @@ class ArchiveStore:
         self._cleanup_dirs(upload.target_path)
 
     def _cleanup_dirs(self, target_path: Path) -> None:
-        for directory in (target_path.parent, target_path.parent.parent):
-            try:
-                directory.rmdir()
-            except OSError:
-                break
+        try:
+            target_path.parent.rmdir()
+        except OSError:
+            pass
 
     def _chunk(self, request: dict) -> dict:
         upload_id = str(request.get("upload_id") or "")
@@ -279,6 +300,8 @@ class ArchiveStore:
         if not isinstance(request, dict) or request.get("version") != PROTOCOL_VERSION:
             raise ProtocolError("Unsupported protocol version")
         request_type = request.get("type")
+        if request_type == "list_domains":
+            return self._list_domains()
         if request_type == "preview":
             return self._preview(request.get("item") or {})
         if request_type == "start":

@@ -27,6 +27,28 @@ import { background } from '../support/utils.mjs';
 
 describe("ItemSaver Background", function() {
 	describe('DeepPaperNote native protocol', function() {
+		it('lists domains through the native host', async function() {
+			const result = await background(async function() {
+				try {
+					sinon.stub(browser.runtime, 'sendNativeMessage').resolves({
+						ok: true,
+						domains: ['视觉理解', '长视频理解'],
+					});
+					let domains = await Zotero.DeepPaperNote.listDomains();
+					return {
+						domains,
+						message: browser.runtime.sendNativeMessage.firstCall.args[1],
+					};
+				}
+				finally {
+					browser.runtime.sendNativeMessage.restore();
+				}
+			});
+
+			assert.deepEqual(result.domains, ['视觉理解', '长视频理解']);
+			assert.deepEqual(result.message, {type: 'list_domains', version: 1});
+		});
+
 		it('downloads one PDF and streams it to the native host', async function() {
 			const result = await background(async function() {
 				const pdf = new TextEncoder().encode('%PDF-1.7\nfixture\n%%EOF\n').buffer;

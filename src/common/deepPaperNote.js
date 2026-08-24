@@ -44,6 +44,14 @@ Zotero.DeepPaperNote = {
 		throw new Error(response?.error?.message || 'DeepPaperNote native host did not respond');
 	},
 
+	async listDomains() {
+		let response = await browser.runtime.sendNativeMessage(this.HOST_NAME, {
+			type: 'list_domains',
+			version: this.PROTOCOL_VERSION,
+		});
+		return this._checkResponse(response).domains;
+	},
+
 	async preview(item, overrides) {
 		let response = await browser.runtime.sendNativeMessage(this.HOST_NAME, {
 			type: 'preview',

@@ -275,6 +275,93 @@ button:active {
 	margin-bottom: 4px;
 }
 
+.DeepPaperNote-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	font-size: 13px;
+}
+
+.DeepPaperNote-headline {
+	font-size: 16px;
+	font-weight: 700;
+}
+
+.DeepPaperNote-row,
+.DeepPaperNote-actions {
+	display: flex;
+	align-items: center;
+}
+
+.DeepPaperNote-pdfRow {
+	gap: 8px;
+}
+
+.DeepPaperNote-pdfRow img {
+	width: 20px;
+	height: 20px;
+}
+
+.DeepPaperNote-pdfRow span,
+.DeepPaperNote-path div {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.DeepPaperNote-field {
+	display: grid;
+	grid-template-columns: 58px 1fr;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+}
+
+.DeepPaperNote-field input,
+.DeepPaperNote-field select {
+	min-width: 0;
+	padding: 4px 6px;
+	font: inherit;
+}
+
+.DeepPaperNote-metadata,
+.DeepPaperNote-path {
+	line-height: 1.45;
+}
+
+.DeepPaperNote-path div {
+	margin-top: 3px;
+	color: #555;
+	white-space: nowrap;
+}
+
+.DeepPaperNote-status {
+	padding: 6px 8px;
+	border-radius: 4px;
+	background: #dcefdc;
+}
+
+.DeepPaperNote-status.is-error {
+	background: #f8d7da;
+	color: #842029;
+}
+
+.DeepPaperNote-actions {
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.DeepPaperNote-actions button {
+	padding: 5px 12px;
+	border-radius: 4px;
+	background: white;
+}
+
+.DeepPaperNote-actions button.is-primary {
+	background: #5c2d91;
+	border-color: #5c2d91;
+	color: white;
+}
+
 
 /* ---------------------- tree.css -------------------------- */
 
@@ -371,4 +458,3 @@ html[dir="rtl"] .arrow svg,
 	text-overflow: ellipsis;
 	margin-left: 4px;
 }
-

@@ -437,24 +437,6 @@ let PageSaving = {
 		if (document.contentType !== 'application/pdf') {
 			throw new Error('DeepPaperNote Connector currently supports PDF attachments only');
 		}
-		let itemType = "pdf";
-
-		let progressItem = {
-			sessionID,
-			id: 1,
-			iconSrc: Zotero.ItemTypes.getImageSrc(`attachment-${itemType}`),
-			title,
-			progress: 0,
-			// TODO passed to ProgressWindow for accessibility messages. Needs to be updated there
-			itemType: Zotero.getString(`itemType_${itemType}`),
-		};
-
-		Zotero.Messaging.sendMessage("progressWindow.show", [sessionID, null, false, true]);
-		Zotero.Messaging.sendMessage(
-			"progressWindow.itemProgress",
-			progressItem
-		);
-
 		let standaloneAttachment = {
 			url: document.location.toString(),
 			mimeType: document.contentType,
@@ -473,19 +455,16 @@ let PageSaving = {
 				date: '',
 				url: document.location.toString(),
 				attachments: [standaloneAttachment],
-			}], (attachment, progress) => {
-				Zotero.Messaging.sendMessage("progressWindow.itemProgress", {
-					...progressItem,
-					progress: progress === false ? 0 : progress,
-				});
-			});
+			}]);
 			Zotero.Messaging.sendMessage("progressWindow.done", [true]);
 			Object.assign(this.sessionDetails, {
 				id: sessionID,
 				url: document.location.href,
 			});
 		} catch (e) {
-			Zotero.Messaging.sendMessage("progressWindow.done", [false, 'unexpectedError']);
+			if (e.code !== 'cancelled') {
+				Zotero.Messaging.sendMessage("progressWindow.done", [false, 'unexpectedError']);
+			}
 			throw e;
 		}
 	},
@@ -505,12 +484,6 @@ let PageSaving = {
 			options.resave = true;
 		}
 		
-		// In some cases, we just reopen the popup instead of saving again
-		if (this._shouldReopenProgressWindow(translatorID, options, translator.itemType)) {
-			Zotero.debug(`PageSaving.onTranslate: Reopening popup`);
-			return Zotero.Messaging.sendMessage("progressWindow.show", [this.sessionDetails.id]);
-		}
-
 		// Each save on multiple should be a new session (do not reopen the popup)
 		if (translator.itemType === 'multiple' && this.sessionDetails.id && !options.resave) {
 			options.resave = true;
@@ -518,30 +491,6 @@ let PageSaving = {
 
 		const sessionID = this._initSession(translatorID, options);
 
-		// If we're likely to show the Select Items window, delay the opening of the
-		// popup until we've had a chance to hide it (which happens in the 'select'
-		// callback in progressWindow_inject.js).
-		let delay = translator.itemType == 'multiple' ? 100 : 0;
-		let sendShowMessage = () => {
-			Zotero.Messaging.sendMessage(
-				"progressWindow.show",
-				[
-					sessionID,
-					null,
-					false,
-				]
-			);
-		}
-		// If tab is not focused (e.g. when saving multiple), setTimeout with 0 delay actually waits for
-		// a long time, probably due to how non-focused tabs are deprioritized in the event loop and causes
-		// the progress window to not be displayed/updated properly
-		if (delay) {
-			setTimeout(sendShowMessage, delay)
-		}
-		else {
-			sendShowMessage();
-		}
-		
 		try {
 			let translators = this.translators.slice(translatorIndex);
 			// If no fallback on failure, only provide the selected translator
@@ -555,11 +504,7 @@ let PageSaving = {
 			Zotero.logError(e);
 			// Clear session details on failure, so another save click tries again
 			this._clearSession();
-			// We delay opening the progressWindow for multiple items so we don't have to flash it
-			// for the select dialog. But it comes back to bite us in the butt if a translation
-			// error occurs immediately since the below command will execute before the progressWindow show,
-			// and then the delayed progressWindow.show will pop up another empty progress window.
-			// Cannot have that!
+			if (e.code === 'cancelled') return;
 			await Zotero.Promise.delay(500);
 			const isAccessLimitingTranslator = SITE_ACCESS_LIMIT_TRANSLATORS.has(translator.translatorID);
 			const errorMessage = e.toString();

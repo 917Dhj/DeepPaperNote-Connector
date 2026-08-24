@@ -21,6 +21,7 @@ class ArchiveStoreTest(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.vault = Path(self.temp_dir.name) / "vault"
         self.vault.mkdir()
+        (self.vault / "Research/Papers/长视频理解").mkdir(parents=True)
         self.store = ArchiveStore(self.vault, "Research/Papers")
         self.item = {
             "title": "Mental World Modeling: A Test?",
@@ -118,16 +119,35 @@ class ArchiveStoreTest(unittest.TestCase):
         self.assertFalse(
             (self.vault / "Research/Papers/长视频理解/Mental_World_Modeling_A_Test").exists()
         )
+        self.assertTrue((self.vault / "Research/Papers/长视频理解").is_dir())
 
     def test_rejects_papers_directory_symlink_outside_vault(self) -> None:
         self.store.close()
         outside = Path(self.temp_dir.name) / "outside"
         outside.mkdir()
-        (self.vault / "Research").mkdir()
+        (self.vault / "Research/Papers/长视频理解").rmdir()
+        (self.vault / "Research/Papers").rmdir()
         (self.vault / "Research/Papers").symlink_to(outside, target_is_directory=True)
 
         with self.assertRaisesRegex(ProtocolError, "papers_dir"):
             ArchiveStore(self.vault, "Research/Papers")
+
+    def test_lists_only_safe_existing_domain_directories(self) -> None:
+        papers = self.vault / "Research/Papers"
+        (papers / "视觉理解").mkdir()
+        (papers / ".hidden").mkdir()
+        (papers / "README.md").write_text("not a domain", encoding="utf-8")
+        outside = Path(self.temp_dir.name) / "outside-domain"
+        outside.mkdir()
+        (papers / "unsafe-link").symlink_to(outside, target_is_directory=True)
+
+        response = self.store.handle({"type": "list_domains", "version": 1})
+
+        self.assertEqual(response, {"ok": True, "domains": ["视觉理解", "长视频理解"]})
+        with self.assertRaisesRegex(ProtocolError, "Domain directory does not exist"):
+            self.store.handle(
+                {"type": "preview", "version": 1, "item": dict(self.item, domain="不存在")}
+            )
 
     def test_native_stdio_protocol_returns_preview_to_allowed_origin(self) -> None:
         config = Path(self.temp_dir.name) / "config.json"

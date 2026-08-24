@@ -61,6 +61,10 @@ if (isTopWindow) {
 	var insideIframe = false;
 	var closeTimerDisabled = false;
 	var blurred = false;
+	var deepPaperNoteMode = false;
+	var deepPaperNoteChangeHandler;
+	var deepPaperNoteResolve;
+	var deepPaperNoteReject;
 	var frameSrc;
 	var frameIsHidden = false;
 	frameSrc = Zotero.getExtensionURL('progressWindow/progressWindow.html');
@@ -243,7 +247,7 @@ if (isTopWindow) {
 		zoteroFrame = new Zotero.Frame({
 			id: frameID,
 			src: frameSrc,
-			title: Zotero.getString('general_saveTo', 'Zotero'),
+			title: 'Save to DeepPaperNote',
 			'data-single-file-hidden-frame': ''
 		}, {
 			position: 'fixed',
@@ -371,8 +375,50 @@ if (isTopWindow) {
 		});
 		
 		addMessageListener('progressWindowIframe.close', function() {
+			if (deepPaperNoteReject) {
+				let error = new Error('DeepPaperNote save cancelled');
+				error.code = 'cancelled';
+				deepPaperNoteReject(error);
+				deepPaperNoteResolve = deepPaperNoteReject = null;
+			}
 			hideFrame();
 			window.focus();
+		});
+
+		addMessageListener('progressWindowIframe.deepPaperNoteChanged', async function(values) {
+			if (!deepPaperNoteChangeHandler) return;
+			addEvent('updateDeepPaperNote', {previewLoading: true, previewError: ''});
+			try {
+				let preview = await deepPaperNoteChangeHandler(values);
+				addEvent('updateDeepPaperNote', {
+					previewLoading: false,
+					previewError: '',
+					previewPath: preview.path,
+				});
+			}
+			catch (error) {
+				addEvent('updateDeepPaperNote', {
+					previewLoading: false,
+					previewError: error.message,
+					previewPath: '',
+				});
+			}
+		});
+
+		addMessageListener('progressWindowIframe.deepPaperNoteSubmit', function(values) {
+			if (!deepPaperNoteResolve) return;
+			deepPaperNoteResolve(values);
+			deepPaperNoteResolve = deepPaperNoteReject = null;
+		});
+
+		addMessageListener('progressWindowIframe.deepPaperNoteCancel', function() {
+			if (deepPaperNoteReject) {
+				let error = new Error('DeepPaperNote save cancelled');
+				error.code = 'cancelled';
+				deepPaperNoteReject(error);
+				deepPaperNoteResolve = deepPaperNoteReject = null;
+			}
+			hideFrame();
 		});
 
 		await frameReadyDeferred.promise;
@@ -403,7 +449,7 @@ if (isTopWindow) {
 		if (syncDelayIntervalID) {
 			clearInterval(syncDelayIntervalID);
 		}
-		syncDelayIntervalID = setInterval(() => {
+		if (!deepPaperNoteMode) syncDelayIntervalID = setInterval(() => {
 			// Don't prevent syncing when read-only or when tab isn't visible.
 			// See note in ProgressWindow.jsx::handleVisibilityChange() for latter.
 			if (isReadOnly || document.hidden || blurred) return;
@@ -418,6 +464,7 @@ if (isTopWindow) {
 	 * This is called after an item has started to save in order to show the progress window
 	 */
 	Zotero.Messaging.addMessageListener("progressWindow.show", async function (args) {
+		deepPaperNoteMode = false;
 		// Mark frame as visible immediately, so that if it's hidden before it's done initializing
 		// (e.g., when displaying the Select Items window) we can skip displaying it
 		frameIsHidden = false;
@@ -485,6 +532,7 @@ if (isTopWindow) {
 	});
 	
 	Zotero.Messaging.addMessageListener("progressWindow.done", async (returnValue) => {
+		if (deepPaperNoteMode) return;
 		const isTabFocused = await Zotero.Connector_Browser.isTabFocused();
 		if (!isTabFocused) {
 			// Don't queue hiding the progress bar if the save finished when the tab was not focused,
@@ -516,6 +564,61 @@ if (isTopWindow) {
 	Zotero.Messaging.addMessageListener("progressWindow.error", (args) => {
 		addError(args.shift(), ...args);
 	})
+
+	Zotero.DeepPaperNotePanel = {
+		async open(data, onChange) {
+			deepPaperNoteMode = true;
+			deepPaperNoteChangeHandler = onChange;
+			frameIsHidden = false;
+			resetFrame();
+			await showFrame();
+			addEvent('showDeepPaperNote', data);
+			return new Promise((resolve, reject) => {
+				deepPaperNoteResolve = resolve;
+				deepPaperNoteReject = reject;
+			});
+		},
+
+		update(data) {
+			addEvent('updateDeepPaperNote', data);
+		},
+
+		complete(result) {
+			addEvent('updateDeepPaperNote', {
+				status: 'saved',
+				statusText: result.status === 'existing' ? 'PDF already archived' : 'PDF saved',
+				previewPath: result.path,
+			});
+			startCloseTimer(3000);
+		},
+
+		fail(error) {
+			addEvent('updateDeepPaperNote', {status: 'error', statusText: error.message});
+		},
+
+		async showError(error, item={}) {
+			deepPaperNoteMode = true;
+			frameIsHidden = false;
+			resetFrame();
+			await showFrame();
+			addEvent('showDeepPaperNote', {
+				values: {
+					title: item.title || '',
+					authorShortName: '',
+					year: `${item.date || ''}`.match(/(?:19|20)\d{2}/)?.[0] || '',
+					domain: '',
+				},
+				domains: [],
+				authors: [],
+				editableMetadata: false,
+				previewPath: '',
+				previewError: '',
+				previewLoading: false,
+				status: 'error',
+				statusText: error.message,
+			});
+		},
+	};
 }
 
 })();
