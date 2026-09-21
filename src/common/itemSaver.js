@@ -71,30 +71,32 @@ ItemSaver.prototype = {
 		);
 		let year = `${item.date || ''}`.match(/(?:19|20)\d{2}/)?.[0] || '';
 		let domains = await Zotero.DeepPaperNote.listDomains();
-		if (!domains.length) throw new Error('No domain folders found in Research/Papers');
 		let savedDomain = await Zotero.Prefs.getAsync('deepPaperNote.domain').catch(() => '');
 		let values = {
 			title: item.title || '',
 			authorShortName: '',
 			year,
-			domain: domains.includes(savedDomain) ? savedDomain : domains[0],
+			domain: domains.includes(savedDomain) ? savedDomain : (domains[0] || ''),
 		};
 		let preview = null;
 		if (values.title.trim() && authors.length && year) {
 			preview = await Zotero.DeepPaperNote.preview(item, values);
 		}
+		values.target_directory = preview?.target_directory || '';
 		let overrides = await Zotero.DeepPaperNotePanel.open({
 			values,
 			domains,
 			authors: authors.map(author => author.lastName || author.name),
 			editableMetadata: this._promptForMetadata || !item.title?.trim() || !authors.length || !year,
 			previewPath: preview?.path || '',
+			candidates: preview?.candidates || [],
+			confidence: preview?.confidence || '',
 			previewError: '',
 			previewLoading: false,
 			status: 'confirm',
 			statusText: '',
 		}, updatedValues => Zotero.DeepPaperNote.preview(item, updatedValues));
-		await Zotero.Prefs.set('deepPaperNote.domain', overrides.domain);
+		if (!overrides.target_directory) await Zotero.Prefs.set('deepPaperNote.domain', overrides.domain);
 		return overrides;
 	},
 

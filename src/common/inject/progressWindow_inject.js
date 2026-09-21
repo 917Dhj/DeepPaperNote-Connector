@@ -85,18 +85,26 @@
 		listen('progressWindowIframe.resized', data => {
 			iframe.style.height = `${data.height + 33}px`;
 		});
+		let previewRevision = 0;
 		listen('progressWindowIframe.deepPaperNoteChanged', async values => {
+			let revision = ++previewRevision;
+			let handler = changeHandler;
 			if (!changeHandler) return;
 			addEvent('updateDeepPaperNote', {previewLoading: true, previewError: ''});
 			try {
-				let preview = await changeHandler(values);
+				let preview = await handler(values);
+				if (revision !== previewRevision || handler !== changeHandler) return;
 				addEvent('updateDeepPaperNote', {
 					previewLoading: false,
 					previewError: '',
 					previewPath: preview.path,
+					candidates: preview.candidates || [],
+					confidence: preview.confidence || '',
+					values: {...values, target_directory: preview.target_directory || ''},
 				});
 			}
 			catch (error) {
+				if (revision !== previewRevision || handler !== changeHandler) return;
 				addEvent('updateDeepPaperNote', {
 					previewLoading: false,
 					previewError: error.message,

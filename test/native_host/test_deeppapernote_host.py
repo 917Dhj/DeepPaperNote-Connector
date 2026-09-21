@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -10,10 +11,22 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import fitz
+
 from native_host.deeppapernote_host import ArchiveStore, ProtocolError
 
 
-PDF = b"%PDF-1.7\n% DeepPaperNote test PDF\n%%EOF\n"
+def pdf(variant="first"):
+    with fitz.open() as doc:
+        page = doc.new_page()
+        page.insert_text(
+            (72, 72),
+            f"Mental World Modeling: A Test?\nFei and Zhao\ndoi:10.1000/example\n{variant}",
+        )
+        return doc.tobytes()
+
+
+PDF = pdf()
 
 
 class ArchiveStoreTest(unittest.TestCase):
@@ -85,17 +98,18 @@ class ArchiveStoreTest(unittest.TestCase):
         self.assertEqual(second["path"], first["path"])
         self.assertEqual(len(list((self.vault / first["path"]).parent.glob("*.pdf"))), 1)
 
-    def test_conflict_uses_stable_identifier_then_fails_closed(self) -> None:
+    def test_different_source_bytes_are_preserved_as_variants(self) -> None:
         first = self.save()
-        different_pdf = b"%PDF-1.7\nsecond PDF\n%%EOF\n"
+        different_pdf = pdf("second")
         second = self.save(different_pdf)
 
         self.assertEqual(first["status"], "saved")
         self.assertEqual(second["status"], "saved")
-        self.assertIn("doi_10.1000_example", second["path"])
+        self.assertIn("source-", second["path"])
 
-        with self.assertRaisesRegex(ProtocolError, "conflict"):
-            self.save(b"%PDF-1.7\nthird PDF\n%%EOF\n")
+        third = self.save(pdf("third"))
+        self.assertEqual(third["status"], "saved")
+        self.assertEqual(len({first["path"], second["path"], third["path"]}), 3)
 
     def test_rejects_path_traversal_non_pdf_and_out_of_order_chunks(self) -> None:
         unsafe = dict(self.item, domain="../outside")
@@ -146,7 +160,11 @@ class ArchiveStoreTest(unittest.TestCase):
         self.assertEqual(response, {"ok": True, "domains": ["视觉理解", "长视频理解"]})
         with self.assertRaisesRegex(ProtocolError, "Domain directory does not exist"):
             self.store.handle(
-                {"type": "preview", "version": 1, "item": dict(self.item, domain="不存在")}
+                {
+                    "type": "preview",
+                    "version": 1,
+                    "item": dict(self.item, domain="不存在"),
+                }
             )
 
     def test_native_stdio_protocol_returns_preview_to_allowed_origin(self) -> None:
@@ -154,9 +172,17 @@ class ArchiveStoreTest(unittest.TestCase):
         extension_id = "a" * 32
         config.write_text(
             json.dumps(
-                {"vault": str(self.vault), "papers_dir": "Research/Papers", "extension_id": extension_id}
+                {
+                    "vault": "/nonexistent/legacy-vault",
+                    "papers_dir": "Legacy",
+                    "extension_id": extension_id,
+                }
             ),
             encoding="utf-8",
+        )
+        shared = Path(self.temp_dir.name) / "shared.json"
+        shared.write_text(
+            json.dumps({"obsidian_vault": str(self.vault), "papers_dir": "Research/Papers"})
         )
         request = json.dumps(
             {"type": "preview", "version": 1, "item": self.item}, ensure_ascii=False
@@ -172,6 +198,7 @@ class ArchiveStoreTest(unittest.TestCase):
             input=struct.pack("<I", len(request)) + request,
             capture_output=True,
             check=True,
+            env={**os.environ, "DEEPPAPERNOTE_CONFIG_PATH": str(shared)},
         )
         size = struct.unpack("<I", completed.stdout[:4])[0]
         response = json.loads(completed.stdout[4 : 4 + size])

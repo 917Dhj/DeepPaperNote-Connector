@@ -55,9 +55,10 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 	onInput(event) {
 		let {name, value} = event.target;
 		this.setState(state => ({
-			data: {...state.data, values: {...state.data.values, [name]: value}},
+			data: {...state.data, previewLoading: true,
+				values: {...state.data.values, target_directory: name === 'target_directory' ? value : '', [name]: value}},
 		}), () => {
-			if (name === 'domain') this.notifyChanged();
+			this.notifyChanged();
 		});
 	}
 
@@ -80,11 +81,12 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 		let data = this.state.data;
 		if (!data) return <div ref={node => { this.rootNode = node; }}/>;
 		let values = data.values;
+		let candidates = data.candidates || [];
 		let busy = data.status === 'saving' || data.status === 'saved';
 		let complete = values.title.trim()
 			&& (values.authorShortName.trim() || data.authors.length)
 			&& /^(?:19|20)\d{2}$/.test(values.year)
-			&& values.domain && data.previewPath
+			&& (values.target_directory || values.domain) && data.previewPath
 			&& !data.previewLoading && !data.previewError;
 
 		return (
@@ -112,11 +114,24 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 						<div><strong>Author:</strong> {data.authors.join(', ')}</div>
 						<div><strong>Year:</strong> {values.year}</div>
 					</div>}
-					<label className="DeepPaperNote-field">Domain
+					{candidates.length > 0 ? <React.Fragment>
+						<div className="DeepPaperNote-existing" role="status" aria-live="polite">
+							{data.confidence === 'verified' ? 'Existing paper directory found. The PDF will be verified before saving.' : 'Title-matched candidate directory. Paper identity will be verified before saving.'}
+						</div>
+						<label className="DeepPaperNote-field">Existing paper directory
+							<select name="target_directory" value={values.target_directory || ''}
+								onChange={this.onInput} disabled={busy}>
+								{!values.target_directory && <option value="">Choose a directory</option>}
+								{candidates.map(candidate => <option key={candidate.path} value={candidate.path} disabled={candidate.confidence === 'invalid'}>
+									{candidate.path} — {candidate.pdf_count} PDFs, {candidate.note_count} notes — {candidate.confidence === 'verified' ? 'Verified match' : candidate.confidence === 'invalid' ? 'Invalid record — repair required' : 'Title-only candidate'}
+								</option>)}
+							</select>
+						</label>
+					</React.Fragment> : <label className="DeepPaperNote-field">Domain
 						<select name="domain" value={values.domain} onChange={this.onInput} disabled={busy}>
 							{data.domains.map(domain => <option key={domain} value={domain}>{domain}</option>)}
 						</select>
-					</label>
+					</label>}
 					<div className="DeepPaperNote-path">
 						<strong>Final path</strong>
 						<div>{data.previewLoading ? 'Checking path…' : data.previewPath || data.previewError}</div>

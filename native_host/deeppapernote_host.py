@@ -20,6 +20,37 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import BinaryIO
 
+try:
+    from .paper_archive import (
+        ArchiveError,
+        admit_directory,
+        archive_location,
+        archive_lock,
+        directory_candidates,
+        record_work_evidence,
+        register_source,
+        safe_path,
+        select_directory,
+        source_details,
+        verify_pdf,
+        write_record,
+    )
+except ImportError:
+    from paper_archive import (
+        ArchiveError,
+        admit_directory,
+        archive_location,
+        archive_lock,
+        directory_candidates,
+        record_work_evidence,
+        register_source,
+        safe_path,
+        select_directory,
+        source_details,
+        verify_pdf,
+        write_record,
+    )
+
 
 HOST_NAME = "com.deeppapernote.connector"
 PROTOCOL_VERSION = 1
@@ -105,16 +136,6 @@ def _author_short_name(item: dict) -> str:
     return f"{names[0]}等"[:60]
 
 
-def _stable_identifier(item: dict) -> str:
-    doi = str(item.get("DOI") or item.get("doi") or "").strip().lower()
-    doi = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", doi)
-    if doi:
-        return "doi_" + re.sub(r"[^0-9a-z.]+", "_", doi).strip("_")[:80]
-    haystack = " ".join(str(item.get(key) or "") for key in ("arXiv", "extra", "url"))
-    match = re.search(r"(?:arxiv[:./\s]+)(\d{4}\.\d{4,5})(?:v\d+)?", haystack, re.I)
-    return f"arxiv_{match.group(1)}" if match else ""
-
-
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -128,7 +149,7 @@ class Upload:
     stream: BinaryIO
     part_path: Path
     target_path: Path
-    identifier: str
+    item: dict
     next_sequence: int = 0
     size: int = 0
     digest: object = None
@@ -175,33 +196,57 @@ class ArchiveStore:
         ]
         return {"ok": True, "domains": sorted(domains, key=str.casefold)}
 
-    def _archive_path(self, item: dict) -> Path:
-        domain_path = self._domain_path(item.get("domain"))
-        title = _canonical_title(item.get("title"))
-        filename = f"{_author_short_name(item)} - {_year(item)} - {title}.pdf"
-        target = domain_path / _slugify(title) / filename
-        try:
-            target.resolve().relative_to(self.papers_root.resolve())
-        except ValueError as exc:
-            raise ProtocolError("Unsafe archive path: path escapes papers_dir") from exc
-        return target
-
     def _relative(self, path: Path) -> str:
         return path.relative_to(self.vault).as_posix()
 
     def _preview(self, item: dict) -> dict:
-        return {"ok": True, "path": self._relative(self._archive_path(item))}
+        title = _canonical_title(item.get("title"))
+        candidates = directory_candidates(self.vault, item, name=_slugify(title))
+        selected = item.get("target_directory", "")
+        if selected:
+            selected = str(safe_path(self.vault, selected))
+        choices = [
+            {**candidate, "path": self._relative(Path(candidate["path"]))}
+            for candidate in candidates
+        ]
+        if len(candidates) > 1 and not selected:
+            return {
+                "ok": True,
+                "path": "",
+                "target_directory": "",
+                "candidates": choices,
+                "requires_selection": True,
+                "confidence": "candidate",
+            }
+        existing = select_directory(candidates, selected)
+        directory = existing or self._domain_path(item.get("domain")) / _slugify(title)
+        filename = f"{_author_short_name(item)} - {_year(item)} - {title}.pdf"
+        target = safe_path(self.vault, self._relative(directory / filename))
+        return {
+            "ok": True,
+            "path": self._relative(target),
+            "target_directory": self._relative(existing) if existing else "",
+            "candidates": choices,
+            "requires_selection": False,
+            "confidence": next(
+                (c["confidence"] for c in candidates if Path(c["path"]) == existing), ""
+            ),
+        }
 
     def _start(self, item: dict) -> dict:
         self._require_papers_root_within_vault()
-        target = self._archive_path(item)
+        preview = self._preview(item)
+        if preview.get("requires_selection"):
+            raise ProtocolError("Select an existing paper directory before saving")
+        target = safe_path(self.vault, preview["path"])
+        item = dict(item, target_directory=preview["target_directory"])
         target.parent.mkdir(parents=True, exist_ok=True)
-        if not target.parent.resolve().is_relative_to(self.papers_root.resolve()):
+        if not target.parent.resolve().is_relative_to(self.vault):
             raise ProtocolError("Unsafe archive path: path escapes papers_dir")
         upload_id = secrets.token_hex(16)
         part_path = target.parent / f".deeppapernote-{upload_id}.part"
         stream = part_path.open("xb")
-        self.uploads[upload_id] = Upload(stream, part_path, target, _stable_identifier(item))
+        self.uploads[upload_id] = Upload(stream, part_path, target, item)
         return {"ok": True, "upload_id": upload_id, "path": self._relative(target)}
 
     def _abort(self, upload_id: str) -> None:
@@ -242,22 +287,22 @@ class ArchiveStore:
 
     def _destination(self, upload: Upload, digest: str) -> tuple[Path, str]:
         target = upload.target_path
+        for path in target.parent.iterdir():
+            if path.suffix.lower() == ".pdf" and path.is_file():
+                safe_path(target.parent, path.name)
+                if _sha256(path) == digest:
+                    return path, "existing"
         if not target.exists():
             return target, "saved"
-        if not target.is_file():
-            raise ProtocolError("Archive path conflict: target is not a file")
-        if _sha256(target) == digest:
+        details = source_details(upload.item, upload.part_path)
+        version = re.search(r"v\d+$", details.get("arxiv_id", ""))
+        label = "arxiv-" + version[0] if version else "source"
+        target = target.with_name(f"{target.stem[:140]} [{label}-{digest[:12]}].pdf")
+        if target.exists():
+            if not target.is_file() or _sha256(target) != digest:
+                raise ProtocolError("Archive path conflict: source filename already occupied")
             return target, "existing"
-        if not upload.identifier:
-            raise ProtocolError("Archive path conflict: existing PDF has different bytes")
-        target = target.with_name(f"{target.stem} [{upload.identifier}].pdf")
-        if not target.exists():
-            return target, "saved"
-        if not target.is_file():
-            raise ProtocolError("Archive path conflict: stable target is not a file")
-        if _sha256(target) == digest:
-            return target, "existing"
-        raise ProtocolError("Archive path conflict: stable identifier already has different bytes")
+        return target, "saved"
 
     def _finish(self, request: dict) -> dict:
         upload_id = str(request.get("upload_id") or "")
@@ -275,28 +320,56 @@ class ArchiveStore:
             with upload.part_path.open("rb") as stream:
                 if b"%PDF-" not in stream.read(1024):
                     raise ProtocolError("Downloaded content is not a PDF")
-            destination, status = self._destination(upload, actual)
-            if status == "saved":
+            observed = verify_pdf(upload.part_path, upload.item, exact_version=True)
+            with archive_lock(self.vault):
+                if _sha256(upload.part_path) != actual:
+                    raise ProtocolError("PDF changed before archive save")
+                preview = self._preview(upload.item)
+                if (
+                    preview.get("requires_selection")
+                    or safe_path(self.vault, preview["path"]).parent != upload.target_path.parent
+                ):
+                    raise ProtocolError("Archive destination changed; select the directory again")
+                registry = admit_directory(upload.target_path.parent, upload.item, actual)
+                record_work_evidence(registry["work"], actual, observed)
+                destination, status = self._destination(upload, actual)
+                if status == "saved":
+                    try:
+                        os.link(upload.part_path, destination)
+                    except FileExistsError:
+                        if _sha256(destination) != actual:
+                            raise ProtocolError("Archive path conflict during save")
+                        status = "existing"
+                    else:
+                        os.chmod(destination, 0o644)
+                details = source_details(upload.item, destination)
+                details["pdf_path"] = destination.name
+                register_source(registry, actual, details)
                 try:
-                    os.link(upload.part_path, destination)
-                except FileExistsError:
-                    if _sha256(destination) != actual:
-                        raise ProtocolError("Archive path conflict during save")
-                    status = "existing"
-                else:
-                    os.chmod(destination, 0o644)
-            return {
-                "ok": True,
-                "status": status,
-                "path": self._relative(destination),
-                "sha256": actual,
-                "bytes": upload.size,
-            }
+                    write_record(destination.parent, registry)
+                except (OSError, ArchiveError) as exc:
+                    raise ProtocolError(
+                        f"PDF retained at {self._relative(destination)}; identity registration incomplete: {exc}"
+                    ) from exc
+                return {
+                    "ok": True,
+                    "status": status,
+                    "path": self._relative(destination),
+                    "sha256": actual,
+                    "bytes": upload.size,
+                }
+
         finally:
             upload.part_path.unlink(missing_ok=True)
             self._cleanup_dirs(upload.target_path)
 
     def handle(self, request: dict) -> dict:
+        try:
+            return self._handle(request)
+        except ArchiveError as exc:
+            raise ProtocolError(str(exc)) from exc
+
+    def _handle(self, request: dict) -> dict:
         if not isinstance(request, dict) or request.get("version") != PROTOCOL_VERSION:
             raise ProtocolError("Unsupported protocol version")
         request_type = request.get("type")
@@ -362,7 +435,21 @@ def run_host(config_path: Path, origin: str = "") -> int:
     expected_origin = f"chrome-extension://{config['extension_id']}/"
     if origin and origin != expected_origin:
         raise ProtocolError("Native host origin is not allowed")
-    store = ArchiveStore(config["vault"], config.get("papers_dir", "Research/Papers"))
+    try:
+        vault, papers_dir = archive_location()
+    except ArchiveError as exc:
+        _write_message(
+            sys.stdout.buffer,
+            {
+                "ok": False,
+                "error": {
+                    "code": exc.code,
+                    "message": f"Configure DeepPaperNote's shared Obsidian location: {exc}",
+                },
+            },
+        )
+        return 1
+    store = ArchiveStore(vault, papers_dir)
     try:
         while True:
             try:
@@ -370,7 +457,10 @@ def run_host(config_path: Path, origin: str = "") -> int:
             except ProtocolError as exc:
                 _write_message(
                     sys.stdout.buffer,
-                    {"ok": False, "error": {"code": "invalid_message", "message": str(exc)}},
+                    {
+                        "ok": False,
+                        "error": {"code": "invalid_message", "message": str(exc)},
+                    },
                 )
                 return 1
             if request is None:
@@ -378,11 +468,17 @@ def run_host(config_path: Path, origin: str = "") -> int:
             try:
                 response = store.handle(request)
             except ProtocolError as exc:
-                response = {"ok": False, "error": {"code": "invalid_request", "message": str(exc)}}
+                response = {
+                    "ok": False,
+                    "error": {"code": "invalid_request", "message": str(exc)},
+                }
             except OSError as exc:
                 response = {
                     "ok": False,
-                    "error": {"code": "io_error", "message": f"Archive write failed: {exc}"},
+                    "error": {
+                        "code": "io_error",
+                        "message": f"Archive write failed: {exc}",
+                    },
                 }
             _write_message(sys.stdout.buffer, response)
     finally:
@@ -394,10 +490,13 @@ def install(vault: str, extension_id: str, papers_dir: str) -> dict:
         raise ProtocolError("Automatic installation currently supports macOS Chrome only")
     if not re.fullmatch(r"[a-p]{32}", extension_id):
         raise ProtocolError("Invalid Chrome extension ID")
-    vault_path = Path(vault).expanduser().resolve()
-    if not vault_path.is_dir():
-        raise ProtocolError("Vault directory does not exist")
-    _safe_relative_parts(papers_dir, "papers_dir")
+    vault_path, shared_papers_dir = archive_location()
+    if vault and Path(vault).expanduser().resolve() != vault_path:
+        raise ProtocolError(
+            "The shared Skill Vault differs from --vault; update Skill preferences explicitly"
+        )
+    if papers_dir and papers_dir != shared_papers_dir:
+        raise ProtocolError("The shared Skill papers directory differs from --papers-dir")
 
     support_dir = Path.home() / "Library/Application Support/DeepPaperNote Connector"
     manifest_dir = Path.home() / "Library/Application Support/Google/Chrome/NativeMessagingHosts"
@@ -407,9 +506,10 @@ def install(vault: str, extension_id: str, papers_dir: str) -> dict:
     config_path = support_dir / "config.json"
     launcher_path = support_dir / "deeppapernote_host"
     shutil.copy2(Path(__file__).resolve(), host_path)
+    shutil.copy2(Path(__file__).with_name("paper_archive.py"), support_dir / "paper_archive.py")
     config_path.write_text(
         json.dumps(
-            {"vault": str(vault_path), "papers_dir": papers_dir, "extension_id": extension_id},
+            {"extension_id": extension_id},
             ensure_ascii=False,
             indent=2,
         )
@@ -419,7 +519,7 @@ def install(vault: str, extension_id: str, papers_dir: str) -> dict:
     launcher_path.write_text(
         "#!/bin/sh\nexec "
         f"{shlex.quote(sys.executable)} {shlex.quote(str(host_path))} "
-        f"--config {shlex.quote(str(config_path))} \"$@\"\n",
+        f'--config {shlex.quote(str(config_path))} "$@"\n',
         encoding="utf-8",
     )
     launcher_path.chmod(0o755)
@@ -446,11 +546,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if argv[:1] == ["install"]:
             parser = argparse.ArgumentParser(description="Install the DeepPaperNote native host")
-            parser.add_argument("--vault", required=True)
+            parser.add_argument(
+                "--vault",
+                default="",
+                help="Optional assertion against the shared Skill Vault",
+            )
             parser.add_argument("--extension-id", required=True)
-            parser.add_argument("--papers-dir", default="Research/Papers")
+            parser.add_argument("--papers-dir", default="")
             args = parser.parse_args(argv[1:])
-            print(json.dumps(install(args.vault, args.extension_id, args.papers_dir), ensure_ascii=False))
+            print(
+                json.dumps(
+                    install(args.vault, args.extension_id, args.papers_dir),
+                    ensure_ascii=False,
+                )
+            )
             return 0
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("--config", default=str(Path(__file__).with_name("config.json")))

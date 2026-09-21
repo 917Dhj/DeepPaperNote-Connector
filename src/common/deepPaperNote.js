@@ -20,7 +20,7 @@ Zotero.DeepPaperNote = {
 
 	_archiveItem(item, overrides={}) {
 		let arXiv = '';
-		let match = `${item.extra || ''} ${item.url || ''}`.match(/arxiv[:./\s]+(\d{4}\.\d{4,5})(?:v\d+)?/i);
+		let match = `${item.extra || ''} ${item.url || ''}`.match(/(?:arxiv[:\s]+|arxiv\.org\/(?:abs|pdf)\/)(\d{4}\.\d{4,5}(?:v\d+)?)/i);
 		if (match) arXiv = match[1];
 		return {
 			title: overrides.title || item.title || '',
@@ -34,6 +34,9 @@ Zotero.DeepPaperNote = {
 			year: overrides.year || '',
 			DOI: item.DOI || '',
 			arXiv,
+			url: item.url || '',
+			pdf_url: (item.attachments || []).find(a => a.mimeType?.toLowerCase() === 'application/pdf')?.url || '',
+			target_directory: overrides.target_directory || '',
 			domain: overrides.domain || '',
 			authorShortName: overrides.authorShortName || '',
 		};
