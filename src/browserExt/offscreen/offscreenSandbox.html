@@ -34,8 +34,10 @@
 		it tries to. All legitimate HTTP from translators is proxied through
 		Zotero.HTTP.request, which is overridden in offscreenFunctionOverrides.js
 		to route via messaging to the service worker.
+		Inline styles are allowed because DOMParser parses third-party page HTML;
+		external stylesheets and other network resources remain blocked.
 	-->
-	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-eval'; form-action 'none'; frame-ancestors 'self';">	
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'unsafe-inline'; form-action 'none';">
 	<title>Zotero - Offscreen Translate Sandbox</title>
 </head>
 <body>

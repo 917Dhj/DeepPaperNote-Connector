@@ -375,10 +375,10 @@ let PageSaving = {
 			Zotero.Messaging.sendMessage("progressWindow.done", [true]);
 			return items;
 		} catch (e) {
-			Zotero.logError(e);
 			// Clear session details on failure, so another save click tries again
 			this._clearSession();
 			if (e.code === 'cancelled') return;
+			Zotero.logError(e);
 			await Zotero.Promise.delay(500);
 			const isAccessLimitingTranslator = SITE_ACCESS_LIMIT_TRANSLATORS.has(translator.translatorID);
 			const errorMessage = e.toString();
