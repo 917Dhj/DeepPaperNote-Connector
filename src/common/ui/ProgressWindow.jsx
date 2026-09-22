@@ -132,7 +132,7 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 							{data.domains.map(domain => <option key={domain} value={domain}>{domain}</option>)}
 						</select>
 					</label>}
-					<div className="DeepPaperNote-path">
+					<div className={`DeepPaperNote-path${data.previewError && !data.previewLoading ? ' is-error' : ''}`}>
 						<strong>Final path</strong>
 						<div>{data.previewLoading ? 'Checking path…' : data.previewPath || data.previewError}</div>
 					</div>

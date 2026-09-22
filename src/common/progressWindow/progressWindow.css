@@ -76,6 +76,12 @@ button {
 	white-space: nowrap;
 }
 
+.DeepPaperNote-existing,
+.DeepPaperNote-path.is-error div {
+	color: #b42318;
+	font-weight: 600;
+}
+
 .DeepPaperNote-status {
 	padding: 6px 8px;
 	border-radius: 4px;
@@ -83,7 +89,7 @@ button {
 }
 
 .DeepPaperNote-status.is-error {
-	color: #842029;
+	color: #b42318;
 	background: #f8d7da;
 }
 

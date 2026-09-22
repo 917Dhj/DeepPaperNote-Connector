@@ -31,6 +31,7 @@ describe('Archive directory selection', function() {
         await frame.select('select[name="target_directory"]', 'Other/Paper');
         await frame.waitForFunction(() => !document.querySelector('button.is-primary').disabled);
         assert.include(await frame.$eval('.DeepPaperNote-existing', node => node.textContent), 'Existing paper directory');
+        assert.equal(await frame.$eval('.DeepPaperNote-existing', node => getComputedStyle(node).color), 'rgb(180, 35, 24)');
         await frame.click('button.is-primary');
         await tab.page.waitForFunction(() => window.archiveSelection !== null);
         assert.equal(await tab.run(() => window.archiveSelection.target_directory), 'Other/Paper');
