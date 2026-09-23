@@ -42,4 +42,7 @@ jobs:
         run: bash scripts/runtests.sh -i -f
 
       - name: Run native host tests
-        run: python3 -m unittest discover -s test/native_host -p 'test_*.py'
+        run: |
+          python3 -m venv /tmp/deeppapernote-ci-venv
+          /tmp/deeppapernote-ci-venv/bin/python -m pip install -r native_host/requirements.txt
+          /tmp/deeppapernote-ci-venv/bin/python -m unittest discover -s test/native_host -p 'test_*.py'
