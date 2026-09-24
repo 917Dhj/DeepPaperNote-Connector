@@ -1,24 +1,67 @@
+<div align="center">
+
 # DeepPaperNote Connector
 
-DeepPaperNote Connector is a Chrome extension that uses Zotero's Translator and attachment-acquisition code to archive paper PDFs into the same Obsidian directories used by DeepPaperNote:
+**Save papers from your browser straight to Obsidian.**
+
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
+[Get started](#quick-start) · [Read deeply with DeepPaperNote](https://github.com/917Dhj/DeepPaperNote) · [AGPLv3](./COPYING)
+
+</div>
+
+Found a paper you want to keep? DeepPaperNote Connector helps you capture its PDF, confirm the paper details and destination, and save it into your Obsidian paper library—without manually moving and renaming the download.
+
+When you are ready to study it, hand the saved PDF to [DeepPaperNote](https://github.com/917Dhj/DeepPaperNote). It can generate a deep-reading note in the same paper directory, keeping the source and your understanding together.
+
+**Open a paper → click the extension → confirm the details and folder → find the PDF in Obsidian.**
+
+## Why use Connector?
+
+- **Spend less time filing PDFs.** Capture a PDF from a supported paper page and review its title, authors, year, and destination before saving.
+- **Keep a paper's materials together.** Connector helps you find existing paper directories in your Vault. If several directories match, you choose the destination.
+- **Keep versions without overwriting.** Identical PDFs are reused; different PDF versions of the same paper can coexist. Existing PDFs and notes are preserved.
+- **Collect now, read deeply later.** Save the source while browsing, then use DeepPaperNote when you want an evidence-based note with methods, figures, results, and limitations.
+
+## Quick Start
+
+This setup uses **Chrome on macOS**, a browser extension, and a **local saving component** that writes PDFs into your Vault. You will also need Git, Node.js **22.12+** with npm, and Python **3.10+**. The steps below build the extension from source and load it through Chrome's Developer Mode.
+
+### 1. Choose your Obsidian location
+
+Connector uses the same saved Obsidian location as DeepPaperNote. If you have already configured it, keep that location and continue to step 2.
+
+Otherwise, follow [DeepPaperNote's Quick Start](https://github.com/917Dhj/DeepPaperNote#-quick-start), then ask your agent:
 
 ```text
-Research/Papers/<领域>/<paper_slug>/
-├── <作者短名> - <年份> - <规范标题>.pdf
-└── .deeppapernote.json
+Configure DeepPaperNote's saved Obsidian location for future use:
+Vault: <absolute path to my existing Vault>
+Papers folder inside the Vault: Research/Papers
+Only configure the location for now; do not read a paper yet.
 ```
 
-It does not save to Zotero or zotero.org and does not create Markdown notes, snapshots, `images/`, or `metadata.json`. Existing PDFs are never overwritten: identical SHA-256 content is reused regardless of filename; verified versions and different-byte source variants coexist. The shared identity record preserves existing notes and lets DeepPaperNote continue in this directory.
+Inside that papers folder, create at least one research-domain folder, such as `Research/Papers/Machine Learning`. Connector uses existing domain folders for new papers; it does not create domains itself.
 
-## Setup
+The location is stored in DeepPaperNote's device-local preferences. For manual configuration and troubleshooting, see [User Configuration](https://github.com/917Dhj/DeepPaperNote/blob/develop/skills/deeppapernote/references/user-configuration.md).
+
+### 2. Build and load the extension
 
 ```sh
-git submodule update --init
+git clone --recurse-submodules https://github.com/917Dhj/DeepPaperNote-Connector.git
+cd DeepPaperNote-Connector
 npm ci
-./build.sh -d
+./build.sh
 ```
 
-Load `build/manifestv3` from `chrome://extensions` with Developer Mode enabled. Configure DeepPaperNote's persistent Obsidian location first (`obsidian_vault` and `papers_dir` in `~/.deeppapernote/config.json`). Connector uses this location even if an older native-host configuration points elsewhere. Then install the native host using the generated extension ID:
+In Chrome:
+
+1. Open `chrome://extensions` and enable **Developer mode**.
+2. Choose **Load unpacked** and select this repository's `build/manifestv3` folder.
+3. Copy the extension's **ID** for the next step.
+
+### 3. Install the local saving component
+
+Run these commands from the same repository directory, replacing the placeholder with the ID shown by Chrome:
 
 ```sh
 python3 -m pip install -r native_host/requirements.txt
@@ -26,25 +69,63 @@ python3 native_host/deeppapernote_host.py install \
   --extension-id "<32-character Chrome extension ID>"
 ```
 
-Reload the extension. On a detected paper page, confirm the extracted title, authors, year, existing domain, and final path before saving. A directly opened PDF asks for missing metadata. A matching existing directory is shown and preselected, with its PDF/note counts; title-only matches are labelled as candidates. Multiple matches require one destination choice. The PDF is downloaded and verified after confirmation, as before. Reinstall the native host after updating its code and reload the extension build.
+Use the same Python environment for both commands; the installed host uses that interpreter. If you use a virtual environment, keep it available after installation.
 
-## Product boundary
+Reload the extension in `chrome://extensions`. Open its options, choose a **Default research domain**, and click **Save**. Use **Check native host** to verify the connection and preview a destination without saving a PDF.
 
-- Chrome Manifest V3 and the macOS native host are supported.
-- Exactly one PDF attachment is required.
-- PDF bytes retain browser cookies and referrer handling, then pass PDF magic-byte, SHA-256, work-identity, and explicit revision validation.
-- The host searches the configured Vault for matching directories and reuses them in place. New directories stay under the configured papers root; it never creates a domain folder. Missing or invalid shared configuration blocks saving instead of reverting to an old destination.
-- Firefox, Edge, Safari, Zotero library/cloud saving, Google Docs, snapshots, OCR, notes, and batch capture are not included.
+### 4. Save your first paper
 
-## Development
+Open a supported paper page and click the extension. Review the title, authors, year, domain, and final path, then confirm the save. A directly opened PDF asks you to supply missing paper details.
 
-`./build.sh` creates the production artifact at `build/manifestv3`; `./build.sh -d` includes browser test support.
+If the paper is already in your Vault, the dialog shows matching directories and their PDF/note counts. Check the suggested destination before saving, especially when papers have similar titles.
+
+After a successful save, open the displayed destination in Obsidian. The PDF is named using the author, year, and paper title.
+
+## From a saved PDF to a deep-reading note
+
+Connector handles collection. [DeepPaperNote](https://github.com/917Dhj/DeepPaperNote) handles the deep read, using Claude Code or Codex to turn one paper into a durable Obsidian note.
+
+Give your agent the saved PDF, for example:
+
+```text
+Use DeepPaperNote to generate a deep-reading note for <absolute path to the saved PDF>.
+Save the note in the same Obsidian paper directory.
+```
+
+Different PDF versions can have their own corresponding notes; existing notes remain protected. Collecting a PDF does not automatically start an agent or generate a note.
+
+## Supported scope and common questions
+
+**Do I need Zotero installed?** No. Connector saves papers directly to your Obsidian Vault and does not require a Zotero account or desktop app.
+
+**Can I just collect PDFs?** Yes. You do not need to generate a note for every paper. You do need the shared Obsidian location configured before saving.
+
+**Which browsers and platforms are supported?** Chrome on macOS, with the local saving component installed. Firefox, Edge, Safari, Windows, and Linux are outside the current supported setup.
+
+**Does it work on every paper page?** Capture depends on page recognition and PDF availability. Exactly one PDF attachment is required per paper. Batch capture, web snapshots, Google Docs integration, and OCR are not included.
+
+**Does it generate notes or extract figures?** No. Connector collects PDFs. Use DeepPaperNote when you want a deep-reading note with figures.
+
+**What if the host cannot connect or no domains appear?** Check that the shared Vault and papers folder are configured, a domain folder exists under that papers folder, and the host was installed with this extension's ID. Missing or invalid shared configuration blocks saving instead of using an older destination. For configuration help, see [User Configuration](https://github.com/917Dhj/DeepPaperNote/blob/develop/skills/deeppapernote/references/user-configuration.md).
+
+**How do I update?** After updating the checkout, run `git submodule update --init --recursive`, `npm ci`, and `./build.sh`. Repeat step 3 to update the installed host and its dependencies, then reload the extension. If Chrome assigns a different extension ID, use that ID when reinstalling the host.
+
+## Development and contributions
+
+Bug reports and pull requests are welcome. For capture problems, include the page URL, Chrome/macOS versions, and error message; remove personal paths and private paper details before sharing.
+
+`./build.sh` produces the extension at `build/manifestv3`. Build with test support before running the browser suite:
 
 ```sh
+./build.sh -d
 npm test
 python3 -m unittest discover -s test/native_host
 ```
 
-The retained Zotero-derived code is limited to Translator execution, metadata schemas, proxy-aware HTTP handling, and PDF acquisition. This standalone repository is not affiliated with or endorsed by Zotero and remains licensed under AGPLv3; see [`COPYING`](COPYING).
+The shared archive module, [`native_host/paper_archive.py`](./native_host/paper_archive.py), is vendored from DeepPaperNote's `skills/deeppapernote/scripts/paper_archive.py`. Keep both copies aligned when changing the protocol. Native and browser tests cover archive behavior and directory selection.
 
-The shared archive module `native_host/paper_archive.py` is vendored unchanged from DeepPaperNote `skills/deeppapernote/scripts/paper_archive.py` under MIT; see `native_host/PAPER_ARCHIVE_LICENSE`. Update both copies together. Native and browser tests cover the archive protocol and directory-selection dialog.
+## Acknowledgments and license
+
+DeepPaperNote Connector is derived from [Zotero Connector](https://github.com/zotero/zotero-connectors). It builds on Zotero’s work in recognizing paper pages, collecting paper details, and retrieving PDFs. Thank you to the Zotero project and its contributors for this foundation.
+
+This is a standalone project, not affiliated with or endorsed by Zotero. The repository remains licensed under **AGPLv3**; see [`COPYING`](./COPYING). The shared archive module retains its **MIT** license from DeepPaperNote; see [`native_host/PAPER_ARCHIVE_LICENSE`](./native_host/PAPER_ARCHIVE_LICENSE). Third-party notices remain applicable to their respective components.
