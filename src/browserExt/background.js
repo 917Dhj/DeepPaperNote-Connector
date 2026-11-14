@@ -609,6 +609,7 @@ Zotero.Connector_Browser = new function() {
 			// A new fun bug from Chrome where the url is sometimes an empty string
 			return;
 		}
+		browser.action.setBadgeText({tabId: tab.id, text: ''});
 		browser.contextMenus.removeAll();
 		if (!browser.contextMenus.onClicked.hasListener(_handleContextMenuClick)) {
 			browser.contextMenus.onClicked.addListener(_handleContextMenuClick);
@@ -783,9 +784,7 @@ Zotero.Connector_Browser = new function() {
 
 		browser.action.setIcon({
 			tabId:tab.id,
-			path:(itemType === "multiple"
-				? "images/treesource-collection.png"
-				: Zotero.ItemTypes.getImageSrc(itemType))
+			path: Zotero.ItemTypes.getImageSrc(itemType)
 		});
 
 		browser.action.setTitle({
