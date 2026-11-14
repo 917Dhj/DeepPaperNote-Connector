@@ -48,6 +48,16 @@ describe('Extension assets', function() {
 	});
 });
 
+describe('On-demand content script injection', function() {
+	it('injects the same scripts the manifest runs on page load', function() {
+		let manifest = JSON.parse(fs.readFileSync(path.join(BUILD_DIR, 'manifest.json'), 'utf8'));
+		let background = fs.readFileSync(path.join(BUILD_DIR, 'background.js'), 'utf8');
+		let list = background.match(/_injectTranslationScripts = \[([\s\S]*?)\]/)[1];
+		let injected = [...list.matchAll(/"([^"]+)"/g)].map(match => match[1]);
+		assert.deepEqual(injected, manifest.content_scripts[0].js);
+	});
+});
+
 describe('Saving on an uninjectable page', function() {
 	it('marks the toolbar button instead of throwing', async function() {
 		let tab = new Tab();
