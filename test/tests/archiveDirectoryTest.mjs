@@ -2,7 +2,11 @@ import { Tab, getExtensionURL } from '../support/utils.mjs';
 
 describe('Archive directory selection', function() {
     let tab = new Tab();
-    before(async () => tab.init(getExtensionURL('test/data/journalArticle-single.html')));
+    before(async () => {
+        await tab.init(getExtensionURL('test/data/journalArticle-single.html'));
+        // The asserted colors are the light theme's
+        await tab.page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: 'light'}]);
+    });
     after(async () => tab.close());
 
     it('shows existing directories and submits the explicitly selected destination', async function() {

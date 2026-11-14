@@ -70,3 +70,96 @@ describe('Save progress panel', function() {
 		assert.notInclude(sent, 'progressWindowIframe.deepPaperNoteCancel');
 	});
 });
+
+describe('Save progress panel form', function() {
+	this.timeout(15000);
+	let tab = new Tab();
+	let frame;
+
+	before(async function() {
+		await tab.init(getExtensionURL('test/data/journalArticle-single.html'));
+	});
+
+	after(async function() {
+		await tab.page.emulateMediaFeatures([]);
+		await tab.close();
+	});
+
+	async function openEditablePanel(year) {
+		await tab.run((year) => {
+			Zotero.DeepPaperNotePanel.open({
+				values: {title: 'Paper', authorShortName: 'Author', year, domain: 'New', target_directory: ''},
+				domains: ['New'], authors: [], editableMetadata: true,
+				candidates: [], confidence: '', previewPath: 'New/paper/paper.pdf', previewLoading: false,
+				previewError: '', status: 'confirm', statusText: '',
+			}, async () => ({path: 'New/paper/paper.pdf'})).catch(() => {});
+		}, year);
+		frame = await tab.page.waitForFrame(f => f.url().includes('progressWindow/progressWindow.html'));
+		await frame.waitForFunction(year => document.querySelector('input[name="year"]')?.value === year, {}, year);
+		await frame.evaluate(() => {
+			window.sentMessages = [];
+			let sendMessage = Zotero.Messaging.sendMessage;
+			Zotero.Messaging.sendMessage = function(name, ...args) {
+				window.sentMessages.push(name);
+				return sendMessage.call(this, name, ...args);
+			};
+		});
+	}
+
+	it('submits with Enter from a field', async function() {
+		await openEditablePanel('2026');
+		await frame.focus('input[name="title"]');
+		await tab.page.keyboard.press('Enter');
+		await frame.waitForFunction(() => window.sentMessages.includes('progressWindowIframe.deepPaperNoteSubmit'));
+	});
+
+	it('flags an invalid year only after the field is left, and clears it once fixed', async function() {
+		await openEditablePanel('');
+		let state = () => frame.$eval('input[name="year"]', input => ({
+			invalid: input.getAttribute('aria-invalid'),
+			describedBy: input.getAttribute('aria-describedby') || '',
+			errorShown: getComputedStyle(document.getElementById(input.dataset.error)).display !== 'none',
+		}));
+		// React applies the aria state asynchronously, so wait for it before reading it
+		let settle = invalid => frame.waitForFunction(
+			invalid => document.querySelector('input[name="year"]').getAttribute('aria-invalid') === invalid,
+			{timeout: 2000}, invalid);
+		assert.deepEqual(await state(), {invalid: 'false', describedBy: '', errorShown: false});
+
+		await frame.type('input[name="year"]', '20');
+		assert.equal((await state()).invalid, 'false');
+		await frame.focus('input[name="title"]');
+		await settle('true');
+		let left = await state();
+		assert.equal(left.invalid, 'true');
+		assert.isTrue(left.errorShown);
+		assert.include(left.describedBy, 'year-error');
+
+		await frame.$eval('input[name="year"]', input => input.select());
+		await frame.type('input[name="year"]', '2026');
+		assert.equal(await frame.$eval('input[name="year"]', input => input.value), '2026');
+		await settle('false');
+		assert.deepEqual(await state(), {invalid: 'false', describedBy: '', errorShown: false});
+	});
+
+	it('keeps what the user typed when an older preview result arrives', async function() {
+		await openEditablePanel('2026');
+		await frame.$eval('input[name="title"]', input => input.select());
+		await frame.type('input[name="title"]', 'Paper Two');
+		// A preview requested before the last keystrokes reports the values it was asked about
+		await tab.run(() => Zotero.DeepPaperNotePanel.update({
+			previewLoading: false, previewPath: 'New/paper/paper.pdf',
+			values: {title: 'Paper', authorShortName: 'Author', year: '2026', domain: 'New', target_directory: ''},
+		}));
+		await frame.waitForFunction(() => document.querySelector('.DeepPaperNote-path div').textContent === 'New/paper/paper.pdf');
+		assert.equal(await frame.$eval('input[name="title"]', input => input.value), 'Paper Two');
+	});
+
+	it('follows the dark color scheme on pages that do not declare one', async function() {
+		await tab.page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: 'light'}]);
+		await openEditablePanel('2026');
+		let light = await frame.$eval('.ProgressWindow-box', box => getComputedStyle(box).backgroundColor);
+		await tab.page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: 'dark'}]);
+		await frame.waitForFunction(light => getComputedStyle(document.querySelector('.ProgressWindow-box')).backgroundColor !== light, {timeout: 2000}, light);
+	});
+});
