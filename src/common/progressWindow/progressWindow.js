@@ -27,10 +27,7 @@ window.onload = async function () {
 	var div = document.getElementById('progress-window');
 	Zotero.Messaging.init();
 	await Zotero.i18n.init();
-	ReactDOM.render(
-		React.createElement(Zotero.UI.ProgressWindow),
-		div
-	);
+	ReactDOM.createRoot(div).render(React.createElement(Zotero.UI.ProgressWindow));
 
 	// To enable testing with mocha
 	Zotero.isInject = true;
