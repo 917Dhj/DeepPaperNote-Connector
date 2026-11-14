@@ -1,31 +1,29 @@
 const DOMAIN_PREF = 'deepPaperNote.domain';
-const HOST_NAME = 'com.deeppapernote.connector';
 const domainInput = document.querySelector('#domain');
 const status = document.querySelector('#status');
 
 document.querySelector('#extension-id').textContent = browser.runtime.id;
 
-function getPref() {
-	return browser.runtime.sendMessage(['Prefs.getAsync', [DOMAIN_PREF]]);
-}
-
-function setPref(value) {
-	return browser.runtime.sendMessage(['Prefs.set', [DOMAIN_PREF, value]]);
+async function callBackground(name, ...args) {
+	let response = await browser.runtime.sendMessage([name, args]);
+	if (Array.isArray(response) && response[0] === 'error') {
+		throw new Error(JSON.parse(response[1]).message);
+	}
+	return response;
 }
 
 async function loadDomains() {
-	let [response, savedDomain] = await Promise.all([
-		browser.runtime.sendNativeMessage(HOST_NAME, {type: 'list_domains', version: 1}),
-		getPref(),
+	let [domains, savedDomain] = await Promise.all([
+		callBackground('DeepPaperNote.listDomains'),
+		callBackground('Prefs.getAsync', DOMAIN_PREF),
 	]);
-	if (!response?.ok) throw new Error(response?.error?.message || 'Native host did not respond');
-	domainInput.replaceChildren(...response.domains.map(domain => new Option(domain, domain)));
-	domainInput.disabled = response.domains.length === 0;
-	if (!response.domains.length) {
+	domainInput.replaceChildren(...domains.map(domain => new Option(domain, domain)));
+	domainInput.disabled = domains.length === 0;
+	if (!domains.length) {
 		status.textContent = 'No domain folders found in Research/Papers.';
 		return;
 	}
-	domainInput.value = response.domains.includes(savedDomain) ? savedDomain : response.domains[0];
+	domainInput.value = domains.includes(savedDomain) ? savedDomain : domains[0];
 }
 
 loadDomains().catch(error => {
@@ -33,29 +31,26 @@ loadDomains().catch(error => {
 	status.textContent = `Could not load domains: ${error.message}`;
 });
 
-document.querySelector('#save').addEventListener('click', () => {
+document.querySelector('#save').addEventListener('click', async () => {
 	let domain = domainInput.value;
 	if (!domain) return;
-	status.textContent = 'Default domain saved.';
-	setPref(domain).catch(error => {
+	try {
+		await callBackground('Prefs.set', DOMAIN_PREF, domain);
+		status.textContent = 'Default domain saved.';
+	}
+	catch (error) {
 		status.textContent = `Could not save default domain: ${error.message}`;
-	});
+	}
 });
 
 document.querySelector('#check').addEventListener('click', async () => {
 	status.textContent = 'Checking native host…';
 	try {
-		let response = await browser.runtime.sendNativeMessage(HOST_NAME, {
-			type: 'preview',
-			version: 1,
-			item: {
-				title: 'Connection Test',
-				creators: [{creatorType: 'author', lastName: 'DeepPaperNote'}],
-				date: String(new Date().getFullYear()),
-				domain: domainInput.value,
-			},
-		});
-		if (!response?.ok) throw new Error(response?.error?.message || 'Native host did not respond');
+		let response = await callBackground('DeepPaperNote.preview', {
+			title: 'Connection Test',
+			creators: [{creatorType: 'author', lastName: 'DeepPaperNote'}],
+			date: String(new Date().getFullYear()),
+		}, {domain: domainInput.value});
 		status.textContent = `Native host connected. Preview: ${response.path}`;
 	}
 	catch (error) {

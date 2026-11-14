@@ -47,21 +47,47 @@ Zotero.DeepPaperNote = {
 		throw new Error(response?.error?.message || 'DeepPaperNote native host did not respond');
 	},
 
+	// Turns Chrome's native messaging errors into instructions the user can follow
+	_nativeHostError(error) {
+		let message = error?.message || '';
+		let reinstall = 'Run "python3 native_host/deeppapernote_host.py install" in the DeepPaperNote Connector checkout, then reload the extension.';
+		if (/native messaging host not found/i.test(message)) {
+			return new Error(`DeepPaperNote native host is not installed. ${reinstall}`);
+		}
+		if (/forbidden/i.test(message)) {
+			return new Error(`DeepPaperNote native host does not allow this extension (${browser.runtime.id}). ${reinstall}`);
+		}
+		if (/has exited|failed to start/i.test(message)) {
+			return new Error(`DeepPaperNote native host failed to run. Make sure the Python environment it was installed with still exists. ${reinstall}`);
+		}
+		return error;
+	},
+
+	async _sendNativeMessage(message) {
+		let response;
+		try {
+			response = await browser.runtime.sendNativeMessage(this.HOST_NAME, message);
+		}
+		catch (error) {
+			throw this._nativeHostError(error);
+		}
+		return this._checkResponse(response);
+	},
+
 	async listDomains() {
-		let response = await browser.runtime.sendNativeMessage(this.HOST_NAME, {
+		let response = await this._sendNativeMessage({
 			type: 'list_domains',
 			version: this.PROTOCOL_VERSION,
 		});
-		return this._checkResponse(response).domains;
+		return response.domains;
 	},
 
 	async preview(item, overrides) {
-		let response = await browser.runtime.sendNativeMessage(this.HOST_NAME, {
+		return this._sendNativeMessage({
 			type: 'preview',
 			version: this.PROTOCOL_VERSION,
 			item: this._archiveItem(item, overrides),
 		});
-		return this._checkResponse(response);
 	},
 
 	_selectPDF(item) {
@@ -103,7 +129,7 @@ Zotero.DeepPaperNote = {
 			if (!waiting) return;
 			let {reject} = waiting;
 			waiting = null;
-			reject(new Error(browser.runtime.lastError?.message || 'DeepPaperNote native host disconnected'));
+			reject(this._nativeHostError(new Error(browser.runtime.lastError?.message || 'DeepPaperNote native host disconnected')));
 		});
 		return {
 			send: message => {
