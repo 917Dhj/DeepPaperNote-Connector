@@ -397,8 +397,8 @@ let PageSaving = {
 		}
 	},
 
-	async onSaveAsWebpage([title=document.title]) {
-		this._initSession('pdf');
+	async onSaveAsWebpage([title=document.title, options={}]) {
+		this._initSession('pdf', options);
 		return this._saveAsStandaloneAttachment({title});
 	}
 }
