@@ -164,41 +164,43 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 			<div ref={node => { this.rootNode = node; }} className="ProgressWindow-box">
 				<form key={this.state.formKey} className="DeepPaperNote-panel" onSubmit={this.onSubmit}>
 					<div className="DeepPaperNote-headline">Save to DeepPaperNote</div>
-					<div className="DeepPaperNote-row DeepPaperNote-pdfRow">
+					{(!data.messageOnly || values.title) && <div className="DeepPaperNote-row DeepPaperNote-pdfRow">
 						<img src={Zotero.getExtensionURL('images/pdf.png')} alt=""/>
 						<span title={values.title}>{values.title || 'Untitled PDF'}</span>
-					</div>
-					{data.editableMetadata ? <React.Fragment>
-						{this.renderTextField('title', 'Title', {required: true})}
-						{this.renderTextField('authorShortName', 'Author', {required: !data.authors.length})}
-						{this.renderTextField('year', 'Year', {required: true, pattern: YEAR_PATTERN,
-							inputMode: 'numeric', maxLength: 4})}
-					</React.Fragment> : <div className="DeepPaperNote-metadata">
-						<div><strong>Author:</strong> {data.authors.join(', ')}</div>
-						<div><strong>Year:</strong> {values.year}</div>
 					</div>}
-					{candidates.length > 0 ? <React.Fragment>
-						<div className="DeepPaperNote-existing" role="status" aria-live="polite">
-							{data.confidence === 'verified' ? 'Existing paper directory found. The PDF will be verified before saving.' : 'Title-matched candidate directory. Paper identity will be verified before saving.'}
-						</div>
-						<label className="DeepPaperNote-field">Existing paper directory
-							<select name="target_directory" value={values.target_directory || ''}
-								onChange={this.onInput} disabled={busy}>
-								{!values.target_directory && <option value="">Choose a directory</option>}
-								{candidates.map(candidate => <option key={candidate.path} value={candidate.path} disabled={candidate.confidence === 'invalid'}>
-									{candidate.path} — {candidate.pdf_count} PDFs, {candidate.note_count} notes — {candidate.confidence === 'verified' ? 'Verified match' : candidate.confidence === 'invalid' ? 'Invalid record — repair required' : 'Title-only candidate'}
-								</option>)}
+					{!data.messageOnly && <React.Fragment>
+						{data.editableMetadata ? <React.Fragment>
+							{this.renderTextField('title', 'Title', {required: true})}
+							{this.renderTextField('authorShortName', 'Author', {required: !data.authors.length})}
+							{this.renderTextField('year', 'Year', {required: true, pattern: YEAR_PATTERN,
+								inputMode: 'numeric', maxLength: 4})}
+						</React.Fragment> : <div className="DeepPaperNote-metadata">
+							<div><strong>Author:</strong> {data.authors.join(', ')}</div>
+							<div><strong>Year:</strong> {values.year}</div>
+						</div>}
+						{candidates.length > 0 ? <React.Fragment>
+							<div className="DeepPaperNote-existing" role="status" aria-live="polite">
+								{data.confidence === 'verified' ? 'Existing paper directory found. The PDF will be verified before saving.' : 'Title-matched candidate directory. Paper identity will be verified before saving.'}
+							</div>
+							<label className="DeepPaperNote-field">Existing paper directory
+								<select name="target_directory" value={values.target_directory || ''}
+									onChange={this.onInput} disabled={busy}>
+									{!values.target_directory && <option value="">Choose a directory</option>}
+									{candidates.map(candidate => <option key={candidate.path} value={candidate.path} disabled={candidate.confidence === 'invalid'}>
+										{candidate.path} — {candidate.pdf_count} PDFs, {candidate.note_count} notes — {candidate.confidence === 'verified' ? 'Verified match' : candidate.confidence === 'invalid' ? 'Invalid record — repair required' : 'Title-only candidate'}
+									</option>)}
+								</select>
+							</label>
+						</React.Fragment> : <label className="DeepPaperNote-field">Domain
+							<select name="domain" value={values.domain} onChange={this.onInput} disabled={busy}>
+								{data.domains.map(domain => <option key={domain} value={domain}>{domain}</option>)}
 							</select>
-						</label>
-					</React.Fragment> : <label className="DeepPaperNote-field">Domain
-						<select name="domain" value={values.domain} onChange={this.onInput} disabled={busy}>
-							{data.domains.map(domain => <option key={domain} value={domain}>{domain}</option>)}
-						</select>
-					</label>}
-					<div className={`DeepPaperNote-path${data.previewError && !data.previewLoading ? ' is-error' : ''}`}>
-						<strong>Final path</strong>
-						<div>{data.previewLoading ? 'Checking path…' : data.previewPath || data.previewError}</div>
-					</div>
+						</label>}
+						<div className={`DeepPaperNote-path${data.previewError && !data.previewLoading ? ' is-error' : ''}`}>
+							<strong>Final path</strong>
+							<div>{data.previewLoading ? 'Checking path…' : data.previewPath || data.previewError}</div>
+						</div>
+					</React.Fragment>}
 					{data.statusText && <div className={`DeepPaperNote-status is-${data.status}`}
 							role={data.status === 'error' ? 'alert' : 'status'} aria-live="polite">
 						{data.statusText}

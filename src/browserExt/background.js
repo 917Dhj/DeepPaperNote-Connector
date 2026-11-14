@@ -797,7 +797,6 @@ Zotero.Connector_Browser = new function() {
 	function _showWebpageIcon(tab) {
 		browser.action.setIcon({tabId: tab.id, path: browser.runtime.getURL('Icon-32.png')});
 		browser.action.setTitle({tabId: tab.id, title: 'No research PDF detected'});
-		browser.action.disable(tab.id);
 	}
 
 	this._showPDFIcon = function(tab) {
@@ -939,14 +938,16 @@ Zotero.Connector_Browser = new function() {
 	
 	/**
 	 * Safari doesn't run content scripts in tabs that are already open when the user grants
-	 * site access, so inject them on demand before performing a user action, and give
-	 * translator detection a moment to report before a save mode is chosen
+	 * site access, and after the extension reloads or updates, content scripts in open tabs
+	 * can no longer reach it, so the tab never reports detection results. Inject the scripts
+	 * on demand before performing a user action, and give translator detection a moment to
+	 * report before a save mode is chosen
 	 *
 	 * @param tab {Object}
 	 * @returns {Promise<Boolean>} False if the action should be abandoned
 	 */
 	async function _ensureScriptsInjected(tab) {
-		if (!Zotero.isSafari) return true;
+		if (!Zotero.isSafari && Zotero.Connector_Browser.getTabInfo(tab.id).translators) return true;
 		await Zotero.Connector_Browser.injectTranslationScripts(tab);
 		let startURL = Zotero.Connector_Browser.getTabInfo(tab.id).url;
 		// The tabInfo object is replaced when the tab navigates, so look it up on each check
@@ -981,6 +982,16 @@ Zotero.Connector_Browser = new function() {
 		else if (tabInfo.isPDF) {
 			Zotero.Connector_Browser.saveAsWebpage(tab, tabInfo.frameId);
 		}
+		else {
+			await _showNoPaperDetected(tab);
+		}
+	}
+
+	async function _showNoPaperDetected(tab) {
+		let shown = await Zotero.Messaging.sendMessage('deepPaperNotePanel.showError',
+			["No paper detected on this page. Open the paper's landing page or PDF, then try again."], tab);
+		// Without a working content script, mark the toolbar button instead
+		if (!shown) await Zotero.Utilities.saveWithoutProgressWindow(tab);
 	}
 
 	/**

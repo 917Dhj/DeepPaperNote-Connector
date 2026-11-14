@@ -137,6 +137,11 @@
 		return iframe;
 	}
 
+	listen('deepPaperNotePanel.showError', async ([message]) => {
+		await Zotero.DeepPaperNotePanel.showError(new Error(message));
+		return true;
+	});
+
 	Zotero.DeepPaperNotePanel = {
 		async open(data, onChange) {
 			changeHandler = onChange;
@@ -184,6 +189,7 @@
 				previewLoading: false,
 				status: 'error',
 				statusText: error.message,
+				messageOnly: true,
 			});
 		},
 	};
