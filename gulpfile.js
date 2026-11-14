@@ -280,9 +280,11 @@ function processFile() {
 								injectIncludeManifestV3.map((s) => `"${s}"`).join(',\n\t\t\t'));
 					}
 					else {
-						contents = contents.replace(
-							"/*BACKGROUND SCRIPTS*/",
-							backgroundIncludeBrowserExt.map((s) => `"${s}"`).join(',\n\t'));
+						contents = contents
+							.replace("/*BACKGROUND SCRIPTS*/",
+								backgroundIncludeBrowserExt.map((s) => `"${s}"`).join(',\n\t'))
+							.replace("/*INJECT SCRIPTS*/",
+								injectIncludeManifestV3.map((s) => `"${s}"`).join(',\n\t\t'));
 					}
 					
 					contents = contents
