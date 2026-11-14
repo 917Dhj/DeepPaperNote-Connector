@@ -36,14 +36,24 @@ Zotero.Connector_Browser = new function() {
 	this._tabInfo = _tabInfo;
 	let buttonContext = ['browser_action'];
 	
-	// Keep MV3 alive while long-running download or interception work is active.
-	this._keepServiceWorkerAlive = 0;
-	
-	this.shouldKeepServiceWorkerAlive = () => this._keepServiceWorkerAlive;
+	// Keep MV3 alive while long-running download, selection or interception work is active.
+	// Extension API calls reset the service worker idle timer, so ping one while work is pending.
 	// Parallel async functions may call this, so we use a counter to make sure
 	// one keep-alive function finishing does not kill the service worker for other
 	// still-running functions
-	this.setKeepServiceWorkerAlive = (val) => this._keepServiceWorkerAlive += val ? 1 : -1;
+	let keepAliveCount = 0;
+	let keepAliveTimer = null;
+	this.setKeepServiceWorkerAlive = (val) => {
+		keepAliveCount += val ? 1 : -1;
+		if (keepAliveCount > 0 && !keepAliveTimer) {
+			keepAliveTimer = setInterval(() => browser.runtime.getPlatformInfo(), 20e3);
+		}
+		else if (keepAliveCount <= 0 && keepAliveTimer) {
+			clearInterval(keepAliveTimer);
+			keepAliveTimer = null;
+		}
+	};
+	this.isKeepingServiceWorkerAlive = () => keepAliveCount > 0;
 	
 	this.init = async function() {
 		if (Zotero.isManifestV3) {

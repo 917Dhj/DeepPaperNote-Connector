@@ -30,7 +30,6 @@
 try {
 	var scriptsToImport = [
 		/*BACKGROUND SCRIPTS*/,
-		"keep-mv3-alive.js",
 		"background.js"
 	];
 

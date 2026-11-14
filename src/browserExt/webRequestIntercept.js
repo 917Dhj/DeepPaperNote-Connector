@@ -173,6 +173,8 @@ Zotero.WebRequestIntercept = {
 		return this.replaceHeadersDNR(url, headers);
 	},
 	
+	_activeRuleIDs: new Set(),
+
 	replaceHeadersDNR: async function(url, headers) {
 		const requestHeaders = headers.map((headerObj) => {
 			if (headerObj.name.toLowerCase() === 'cookie') {
@@ -195,6 +197,7 @@ Zotero.WebRequestIntercept = {
 		}];
 		// Keep the service worker alive while the rule is active
 		Zotero.Connector_Browser.setKeepServiceWorkerAlive(true);
+		this._activeRuleIDs.add(ruleID);
 		try {
 			await browser.declarativeNetRequest.updateSessionRules({
 				removeRuleIds: rules.map(r => r.id),
@@ -217,7 +220,10 @@ Zotero.WebRequestIntercept = {
 	},
 	
 	removeRuleDNR: async function(ruleId) {
-		Zotero.Connector_Browser.setKeepServiceWorkerAlive(false);
+		// Callers and the 60s cleanup timer may both remove the same rule
+		if (this._activeRuleIDs.delete(ruleId)) {
+			Zotero.Connector_Browser.setKeepServiceWorkerAlive(false);
+		}
 		return browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [ruleId] });
 	}
 }
