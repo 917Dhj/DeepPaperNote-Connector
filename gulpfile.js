@@ -281,9 +281,6 @@ function processFile() {
 						contents = contents
 							.replace("/*INJECT SCRIPTS*/",
 								injectIncludeManifestV3.map((s) => `"${s}"`).join(',\n\t\t\t'));
-						if (process.env.CHROME_EXTENSION_KEY && ['manifestv3'].includes(browser)) {
-							contents = contents.replace(/("name": "[^"]*")/, `$1,\n\t"key": "${process.env.CHROME_EXTENSION_KEY}"`);
-						}
 					}
 					else {
 						contents = contents.replace(

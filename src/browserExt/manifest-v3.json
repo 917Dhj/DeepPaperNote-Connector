@@ -1,5 +1,6 @@
 {
 	"name": "DeepPaperNote Connector",
+	"key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtlJwdaYlQovTwU3iazCqD2B40Aqg16vp+a9bfrHx3sImK45xIptT8pEjTBjdOh26FGow3E68axIdeBY2crApD2KpsZcC9B1xx6J1rjfkuOtHnTO5qNm7uZuk4Ql8bpt9PiCl6rRX7XSTwtf93oQWxJ408mYbmo4hGfiIuatGPAU2rQS3Jb26oS8HrP8BkYi8ejQm8GhOlFuSMpd/0XS82ZfWchzQ16V2NGU4WZp+jnq4bPfU/ywcp+U2BosaTHlbYIPF0icBoUU74uDQsEtfJVid7hNGxIAs121+ppNhoPV4zeuVo2XBF8WU718UGywtApJjVB6WX/p39oLTzTDmVwIDAQAB",
 	"manifest_version": 3,
 	"version": "AUTOFILLED",
 	"description": "Archive research PDFs into a DeepPaperNote Obsidian vault",

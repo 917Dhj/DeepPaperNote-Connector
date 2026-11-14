@@ -4,15 +4,18 @@ import base64
 import hashlib
 import json
 import os
+import re
 import struct
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import fitz
 
+from native_host import deeppapernote_host as host
 from native_host.deeppapernote_host import ArchiveStore, ProtocolError
 
 
@@ -208,3 +211,19 @@ class ArchiveStoreTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExtensionIdTest(unittest.TestCase):
+    def test_default_extension_id_matches_manifest_key(self) -> None:
+        manifest = (Path(__file__).resolve().parents[2] / "src/browserExt/manifest-v3.json").read_text(
+            encoding="utf-8"
+        )
+        key = re.search(r'"key":\s*"([^"]+)"', manifest).group(1)
+        digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
+        derived = digest.translate(str.maketrans("0123456789abcdef", "abcdefghijklmnop"))
+        self.assertEqual(derived, host.EXTENSION_ID)
+
+    def test_install_defaults_to_fixed_extension_id(self) -> None:
+        with mock.patch.object(host, "install", return_value={}) as install, mock.patch("builtins.print"):
+            self.assertEqual(host.main(["install"]), 0)
+        install.assert_called_once_with("", host.EXTENSION_ID, "")
