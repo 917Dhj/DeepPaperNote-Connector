@@ -33,7 +33,7 @@ Zotero.UI.ProgressWindow = class ProgressWindow extends React.PureComponent {
 			this.setState(state => ({data: {...state.data, ...update}}));
 		});
 		document.addEventListener('keydown', event => {
-			if (event.key === 'Escape') this.cancel();
+			if (event.key === 'Escape' && this.state.data?.status !== 'saving') this.cancel();
 		});
 		this.send('registered');
 	}
