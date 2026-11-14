@@ -98,13 +98,7 @@ Zotero.HTTP = new function() {
 		let originalOptions = Zotero.Utilities.deepCopy(options);
 		
 		try {
-			if (Zotero.isManifestV3) {
-				return await Zotero.HTTP._requestFetch(method, url, options);
-			}
-			else {
-				return await Zotero.HTTP._requestXHR(method, url, options);
-			}
-
+			return await Zotero.HTTP._requestFetch(method, url, options);
 		}
 		catch (e) {
 			if ((e.status === 429 || e.retryAfter) && options.backoff < options.maxBackoff) {
@@ -131,154 +125,6 @@ Zotero.HTTP = new function() {
 		}
 	};
 	
-	// Only used by Firefox and Safari
-	this._requestXHR = async function(method, url, options) {
-		var useContentXHR = false;
-		let DNRRuleID;
-		
-		// Request routing rules:
-		// If user-agent needs replacing, route via background (cannot replace in content-script)
-		// Firefox: use content xhr for same-origin requests, because that sends the correct
-		// referrer, otherwise route via background
-		// Safari: use extension xhr for same-origin requests, because that sends the correct
-		// referrer, otherwise route via background
-		let shouldRouteViaInject = Zotero.isInject && (options.forceInject
-			|| Zotero.HTTP.isSameOrigin(url) && !options.headers['User-Agent']);
-		let shouldUseContentXHR = shouldRouteViaInject && Zotero.isFirefox;
-		if (shouldUseContentXHR) {
-			// The privileged XHR that Firefox makes available to content scripts so that they
-			// can make cross-domain requests doesn't include the Referer header in requests [1],
-			// so sites that check for it don't work properly. As long as we're not making a
-			// cross-domain request, we can use the content XHR that it provides, which does
-			// include Referer. Chrome's XHR in content scripts includes Referer by default.
-			//
-			// [1] https://developer.mozilla.org/en-US/Add-ons/WebExtensions/Content_scripts#XHR_and_Fetch	
-			if (typeof content != 'undefined' && content.XMLHttpRequest) {
-				Zotero.debug("Using content XHR");
-				useContentXHR = true;
-			}
-		}
-		else if (Zotero.isInject && !shouldRouteViaInject) {
-			// Make a cross-origin request via the background page, parsing the responseText with
-			// DOMParser and returning a Proxy with 'response' set to the parsed document
-			let isDocRequest = options.responseType == 'document';
-			let coOptions = Object.assign({}, options);
-			Zotero.HTTP.addDefaultReferrer(url, coOptions);
-			if (isDocRequest) {
-				coOptions.responseType = 'text';
-			}
-			if (Zotero.isSafari && options.headers['User-Agent']) {
-				coOptions.headers['Cookie'] = document.cookie;
-			}
-			return Zotero.COHTTP.request(method, url, coOptions).then(function (xmlhttp) {
-				if (!isDocRequest) return xmlhttp;
-				
-				Zotero.debug("Parsing cross-origin response for " + url);
-				let parser = new DOMParser();
-				let contentType = xmlhttp.getResponseHeader("Content-Type");
-				let doc = parser.parseFromString(xmlhttp.responseText, Zotero.HTTP.determineDOMParserContentType(contentType));
-				
-				return new Proxy(xmlhttp, {
-					get: function (target, name) {
-						return name == 'response' ? doc : target[name];
-					}
-				});
-			});
-		}
-		
-		let logBody = '';
-		if (['GET', 'HEAD'].includes(method)) {
-			if (options.body != null) {
-				throw new Error(`HTTP ${method} cannot have a request body (${options.body})`)
-			}
-		} else if(options.body && !(options.body instanceof ArrayBuffer)) {
-			if (options.headers["Content-Type"] !== 'multipart/form-data') {
-				options.body = typeof options.body == 'string' ? options.body : JSON.stringify(options.body);
-
-				logBody = `: ${options.body.substr(0, options.logBodyLength)}` +
-						options.body.length > options.logBodyLength ? '...' : '';
-				// TODO: make sure below does its job in every API call instance
-				// Don't display password or session id in console
-				logBody = logBody.replace(/password":"[^"]+/, 'password":"********');
-				logBody = logBody.replace(/password=[^&]+/, 'password=********');
-			}
-			
-			if (!options.headers) options.headers = {};
-			if (!options.headers["Content-Type"]) {
-				options.headers["Content-Type"] = "application/x-www-form-urlencoded";
-			}
-			else if (options.headers["Content-Type"] == 'multipart/form-data') {
-				// Allow XHR to set Content-Type with boundary for multipart/form-data
-				delete options.headers["Content-Type"];
-			}
-		}	
-		
-		if (Zotero.isBackground) {
-			if (options.referrer) {
-				options.headers['Referer'] = options.referrer;
-			}
-			let replaceHeaders = HEADERS_SPECIAL_HANDLING.filter(header => !!options.headers[header])
-				.map(header => {
-					const val = { name: header, value: options.headers[header] }
-					delete options.headers['User-Agent'];
-					return val;
-				});
-			if (replaceHeaders.length) {
-				DNRRuleID = await Zotero.WebRequestIntercept.replaceHeaders(url, replaceHeaders);
-			}
-		}
-		Zotero.debug(`HTTP ${method} ${url}${logBody}`);
-		
-		var xmlhttp = useContentXHR ? new content.XMLHttpRequest() : new XMLHttpRequest();
-		xmlhttp.timeout = options.timeout;
-		var promise = Zotero.HTTP._attachHandlers(url, xmlhttp, options);
-		
-		xmlhttp.open(method, url, true);
-
-		for (let header in options.headers) {
-			// Safari logs a warning if you try to set referer (forbidden).
-			// We set it above with DNR anyway.
-			if (Zotero.isSafari && header.toLowerCase() == 'referer') continue;
-			xmlhttp.setRequestHeader(header, options.headers[header]);
-		}
-		
-		xmlhttp.responseType = options.responseType || '';
-		
-		// Maybe should provide "mimeType" option instead. This is xpcom legacy, where responseCharset
-		// could be controlled manually
-		if (options.responseCharset) {
-			xmlhttp.overrideMimeType("text/plain; charset=" + options.responseCharset);
-		}
-		
-		xmlhttp.send(options.body);
-		
-		try {
-			xmlhttp = await promise;
-			if (options.debug && (xmlhttp.responseType === '' || xmlhttp.responseType === 'text')) {
-				Zotero.debug(`HTTP ${xmlhttp.status} ${xmlhttp.responseURL} response: ${xmlhttp.responseText}`);
-			}
-			else {
-				Zotero.debug(`HTTP ${xmlhttp.status} ${xmlhttp.responseURL} response`);
-			}
-			
-			let invalidDefaultStatus = options.successCodes === null &&
-				(xmlhttp.status < 200 || xmlhttp.status >= 300);
-			let invalidStatus = Array.isArray(options.successCodes) && !options.successCodes.includes(xmlhttp.status);
-			if (invalidDefaultStatus || invalidStatus) {
-				// Firefox throws accessing responseText when the response is not text
-				let responseText = ['', 'text'].includes(xmlhttp.responseType) ? xmlhttp.responseText : undefined;
-				throw new Zotero.HTTP.StatusError(xmlhttp, url, responseText);
-			}
-			return xmlhttp;
-		}
-		finally {
-			if (DNRRuleID) {
-				await Zotero.WebRequestIntercept.removeRuleDNR(DNRRuleID);
-			}
-		}
-	}
-	
-	// Only used by MV3 (Chromium)
 	this._requestFetch = async function(method, url, options) {
 		if (Zotero.isInject) {
 			// Make a cross-origin request via the background page, parsing the responseText with
@@ -569,24 +415,6 @@ Zotero.HTTP = new function() {
 	 * See {@link Zotero.HTTP.request} for parameters
 	 * @private
 	 */
-	this._attachHandlers = function(url, xmlhttp, options) {
-		var deferred = Zotero.Promise.defer();
-		xmlhttp.onload = () => deferred.resolve(xmlhttp);
-		xmlhttp.onerror = xmlhttp.onabort = function() {
-			var e = new Zotero.HTTP.StatusError(xmlhttp, url, ['', 'text'].includes(xmlhttp.responseType) ? xmlhttp.responseText : undefined);
-			if (options.successCodes === false) {
-				deferred.resolve(xmlhttp);
-			} else {
-				deferred.reject(e);
-			}
-		};
-		xmlhttp.ontimeout = function() {
-			var e = new Zotero.HTTP.TimeoutError(url, xmlhttp.timeout);
-			Zotero.logError(e);
-			deferred.reject(e);
-		};
-		return deferred.promise;
-	};
 
 	/**
 	 * Claudflare started setting their cf_clearance cookie from an iframe, perhaps as an additional bot

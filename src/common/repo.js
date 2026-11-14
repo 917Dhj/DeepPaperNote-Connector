@@ -34,16 +34,6 @@
  */
 Zotero.Repo = new function() {
 	this.infoRe = /^\s*{[\S\s]*?}\s*?[\r\n]/;
-
-	async function checkRepositoryAccess() {
-		if (!Zotero.isSafari) return;
-		const hasPermission = await browser.permissions.contains({
-			origins: ["https://repo.zotero.org/*"]
-		});
-		if (!hasPermission) {
-			throw new Error('Repo: Skipping request without repo.zotero.org permission');
-		}
-	}
 	
 	/**
 	 * Get translator code from repository
@@ -59,7 +49,6 @@ Zotero.Repo = new function() {
 			// then try repo
 			const url = `${ZOTERO_CONFIG.REPOSITORY_URL}code/${translatorID}?version=${Zotero.version}`;
 			try {
-				await checkRepositoryAccess();
 				let xhr = await Zotero.HTTP.request("GET", url);
 				code = xhr.responseText;
 			}
@@ -101,7 +90,6 @@ Zotero.Repo = new function() {
 		var url = ZOTERO_CONFIG.REPOSITORY_URL + "metadata?version=" + Zotero.version + "&last="+
 				(reset ? "0" : Zotero.Prefs.get("connector.repo.lastCheck.repoTime"));
 
-		await checkRepositoryAccess();
 		xhr = await Zotero.HTTP.request('GET', url);
 		var date = xhr.getResponseHeader("Date");
 		Zotero.Prefs.set("connector.repo.lastCheck.localTime", Date.now());

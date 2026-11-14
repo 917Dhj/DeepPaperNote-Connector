@@ -14,8 +14,6 @@
 */
 
 Zotero.HostPermissions = {
-	onPageLoad() {},
-
 	async checkChromiumActionPermissions(tab) {
 		try {
 			if (await browser.permissions.contains({origins: ['https://*/*']})) return true;

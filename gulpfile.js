@@ -26,7 +26,6 @@
 'use strict';
 
 const path = require('path');
-const replaceBrowser = require('./scripts/replace_browser');
 const spawn = require('child_process').spawn;
 const through = require('through2');
 const gulp = require('gulp');
@@ -293,21 +292,6 @@ function processFile() {
 						contents = contents.replace('_betaBuildExpiration = new Date(2053, 0, 1, 0, 0, 0)',
 							`_betaBuildExpiration = new Date(${process.env.ZOTERO_BETA_BUILD_EXPIRATION})`);
 					}
-					f.contents = Buffer.from(contents);
-				}
-				if (file.path.includes('.html')) {
-					let contents = f.contents.toString()
-						.replace(/\s*<!-- SAFARI -->[\s\S]*?<!-- \/SAFARI -->/g, '');
-					f.contents = Buffer.from(contents);
-				}
-				if (basename == 'zotero.js') {
-					let contents = f.contents.toString()
-						.replace('this.version = [^;]*', `this.version = "${argv.version}";`);
-					contents = replaceBrowser(contents, {
-						firefox: browser == 'firefox',
-						safari: browser == 'safari',
-						manifestV3: browser == 'manifestv3'
-					});
 					f.contents = Buffer.from(contents);
 				}
 				f.path = parts.slice(0, i-1).join('/') + `/build/${browser}/` + parts.slice(i+1).join('/');

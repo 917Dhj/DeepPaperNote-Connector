@@ -47,19 +47,7 @@ if (isTopWindow) {
 	var previousFocus;
 	frameSrc = Zotero.getExtensionURL('modalPrompt/modalPrompt.html');
 
-	function isExtensionPage() {
-		try {
-			return window.location.href.startsWith(browser.runtime.getURL(''));
-		}
-		catch (e) {
-			return false;
-		}
-	}
-
 	async function sendModalPromptMessage(messageName, args) {
-		if (Zotero.isSafari && isExtensionPage()) {
-			return iframe.contentWindow.Zotero.Messaging.receiveMessage([messageName, args]);
-		}
 		return Zotero.Messaging.sendToZoteroFrames(messageName, args);
 	}
 
