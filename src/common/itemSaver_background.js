@@ -23,11 +23,11 @@ Zotero.ItemSaver._fetchAttachment = async function(attachment, tab, attemptBotPr
 		cookies = await Zotero.Connector_Browser.getAllCookies({
 			url: attachment.url,
 			partitionKey: {},
-		}, tab?.id);
+		});
 	}
 	catch (e) {
 		Zotero.debug(`Error getting cookies for ${attachment.url} with partitionKey.`);
-		cookies = await Zotero.Connector_Browser.getAllCookies({url: attachment.url}, tab?.id);
+		cookies = await Zotero.Connector_Browser.getAllCookies({url: attachment.url});
 	}
 	options.headers = {
 		Cookie: cookies.filter(cookie => cookie.partitionKey)

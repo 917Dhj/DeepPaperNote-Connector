@@ -34,5 +34,4 @@ const ZOTERO_CONFIG = {
 	ALWAYS_FETCH_FROM_REPOSITORY: false,
 	BASE_URI: 'https://zotero.org/',
 	WWW_BASE_URL: 'https://www.zotero.org/',
-	CLIENT_DOWNLOAD_URL: 'https://www.zotero.org/download',
 };

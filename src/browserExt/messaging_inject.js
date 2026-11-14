@@ -145,7 +145,6 @@ Zotero.Messaging = new function() {
 	}
 
 	this.sendAsChunks = async function(payload) {
-		if (!Zotero.isChromium) throw new Error("Messaging.sendAsChunks is only required on Chromium");
 		const MAX_CHUNK_SIZE = 8 * (1024 * 1024);
 		const id = Zotero.Utilities.randomString()
 		const numChunks = Math.ceil(payload.length / MAX_CHUNK_SIZE);
