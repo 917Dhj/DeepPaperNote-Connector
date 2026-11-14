@@ -102,12 +102,10 @@ Zotero.OffscreenTranslate = {
 		this.addMessageListener(`Translate.setDocument`, (translate, [html, url, cookie], tabId, frameId) => {
 			// <video> and <audio> elements leak memory in DOMParser, see
 			// https://issues.chromium.org/issues/254330164
-			if (Zotero.isChromium) {
-				// This may break with malformed html, or some very complex
-				// contents of media tags in theory. In practice, they should not
-				// exist, and the tags are generally well formed with simple content.
-				html = html.replace(/<(video|audio)(?:\s[^>]*)?(?:\/>|>.*?<\/\1>)/gis, '');
-			}
+			// This may break with malformed html, or some very complex
+			// contents of media tags in theory. In practice, they should not
+			// exist, and the tags are generally well formed with simple content.
+			html = html.replace(/<(video|audio)(?:\s[^>]*)?(?:\/>|>.*?<\/\1>)/gis, '');
 
 			// In a JS environment (the only one where Connector would work), <noscript> contents
 			// are treated as a literally string, but in a non-js environment (DOMParser), the contents

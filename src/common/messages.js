@@ -152,11 +152,9 @@ var MESSAGES = {
 			}
 		},
 		onZoteroButtonElementClick: true,
-		onHistoryStateUpdated: false,
 		injectScripts: true,
 		isIncognito: true,
 		isTabFocused: true,
-		newerVersionRequiredPrompt: true,
 		openTab: false,
 		openPreferences: false,
 		bringToFront: true

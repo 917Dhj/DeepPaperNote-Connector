@@ -42,20 +42,10 @@ Zotero.WebRequestIntercept = {
 
 	init: function() {
 		const types = ["main_frame", "sub_frame"];
-		// Safari (like MV3) has no blocking webRequest; requesting "blocking" is unsupported there.
-		let useBlocking = !Zotero.isManifestV3 && !Zotero.isSafari;
-		let extraInfoSpec = ["requestHeaders"].concat(useBlocking ? ["blocking"] : []);
-		browser.webRequest.onBeforeSendHeaders.addListener(Zotero.WebRequestIntercept.handleRequest('beforeSendHeaders'), {urls: ['<all_urls>'], types}, extraInfoSpec);
+		browser.webRequest.onBeforeSendHeaders.addListener(Zotero.WebRequestIntercept.handleRequest('beforeSendHeaders'), {urls: ['<all_urls>'], types}, ["requestHeaders"]);
 		browser.webRequest.onErrorOccurred.addListener(Zotero.WebRequestIntercept.removeRequestMeta, {urls: ['<all_urls>'], types});
 		browser.webRequest.onCompleted.addListener(Zotero.WebRequestIntercept.removeRequestMeta, {urls: ['<all_urls>'], types});
-		extraInfoSpec = ["responseHeaders"].concat(useBlocking ? ["blocking"] : []);
-		browser.webRequest.onHeadersReceived.addListener(Zotero.WebRequestIntercept.handleRequest('headersReceived'), {urls: ['<all_urls>'], types}, extraInfoSpec);
-		if (Zotero.isSafari) {
-			// Safari reports the pre-redirect URL in details.url for all events after
-			// a redirect (FB23657175), so track each request's latest redirect target,
-			// which handleRequest() substitutes into details.url
-			browser.webRequest.onBeforeRedirect.addListener(Zotero.WebRequestIntercept.storeRedirect, {urls: ['<all_urls>'], types});
-		}
+		browser.webRequest.onHeadersReceived.addListener(Zotero.WebRequestIntercept.handleRequest('headersReceived'), {urls: ['<all_urls>'], types}, ["responseHeaders"]);
 
 		Zotero.WebRequestIntercept.addListener('beforeSendHeaders', Zotero.WebRequestIntercept.storeRequestHeaders)
 		Zotero.WebRequestIntercept.addListener('headersReceived', Zotero.WebRequestIntercept.offerSavingPDFInFrame)
@@ -65,14 +55,6 @@ Zotero.WebRequestIntercept = {
 		meta.requestHeadersObject = details.requestHeadersObject;
     },
 
-	storeRedirect: function(details) {
-		let meta = Zotero.WebRequestIntercept.reqIDToReqMeta[details.requestId];
-		if (!meta) {
-			meta = {};
-			Zotero.WebRequestIntercept.reqIDToReqMeta[details.requestId] = meta;
-		}
-		meta.redirectUrl = details.redirectUrl;
-	},
 
 	offerSavingPDFInFrame: function(details) {
 		if (details.frameId === 0) return;
@@ -119,10 +101,6 @@ Zotero.WebRequestIntercept = {
 				Zotero.WebRequestIntercept.reqIDToReqMeta[details.requestId] = meta;
 			}
 
-			if (meta.redirectUrl) {
-				details.url = meta.redirectUrl;
-			}
-
 			if (meta.requestHeadersObject) {
 				details.requestHeadersObject = meta.requestHeadersObject;
 			} else if (details.requestHeaders) {
@@ -133,15 +111,8 @@ Zotero.WebRequestIntercept = {
 				details.responseHeadersObject = Zotero.WebRequestIntercept.processHeaders(details.responseHeaders);
 			}
 
-			var returnValue = null;
 			for (let listener of Zotero.WebRequestIntercept.listeners[requestType]) {
-				let retVal = listener(details, meta);
-				if (typeof retVal == 'object') {
-					returnValue = Object.assign(returnValue || {}, retVal);
-				}
-			}
-			if (returnValue !== null && !Zotero.isManifestV3) {
-				return returnValue;
+				listener(details, meta);
 			}
 		}
 	},

@@ -79,11 +79,7 @@ Zotero.BrowserAttachmentMonitor = {
 
 		try {
 			// Add DNR rule and wait for success or timeout
-			if (Zotero.isFirefox) {
-				await this._addWebRequestRule(tabId, ruleId);
-			} else {
-				await this._addDNRRule(tabId, ruleId);
-			}
+			await this._addDNRRule(tabId, ruleId);
 			
 			return await Promise.race([
 				successPromise,
@@ -116,11 +112,9 @@ Zotero.BrowserAttachmentMonitor = {
 				}
 				this._webRequestListeners.delete(ruleId);
 			}
-			if (!Zotero.isFirefox) {
-				await browser.declarativeNetRequest.updateSessionRules({
-					removeRuleIds: [ruleId]
-				});
-			}
+			await browser.declarativeNetRequest.updateSessionRules({
+				removeRuleIds: [ruleId]
+			});
 		}
 	},
 
@@ -162,33 +156,6 @@ Zotero.BrowserAttachmentMonitor = {
 		listeners.push(listener);
 	},
 
-	// Firefox does not support responseHeaders condition, so we use webRequestBlocking instead
-	_addWebRequestRule: async function(tabId, ruleId) {
-		const redirectUrl = Zotero.getExtensionURL("browserAttachmentMonitor/browserAttachmentMonitor.html#success");
-	
-		const listener = (details) => {
-			if (this._isAttachmentResponse(details)) {
-				return { redirectUrl };
-			}
-	
-			// No redirect needed
-			return {}; 
-		};
-	
-		browser.webRequest.onHeadersReceived.addListener(
-			listener,
-			{ urls: ["<all_urls>"], 
-				tabId: tabId,
-				types: ["main_frame", "sub_frame"] 
-			},
-			["blocking", "responseHeaders"]
-		);
-		
-		// Store listener for removal
-		this._addWebRequestListener(ruleId, listener);
-		Zotero.debug(`BrowserAttachmentMonitor: Added listener for tab ${tabId} with ruleId ${ruleId}`);
-	},
-	
 	_addDNRRule: async function(tabId, ruleId) {
 		// responseHeaders are available on Chromium 128+, but there's no way to feature-guard
 		// for it directly, but Promise.try was also added in the same version

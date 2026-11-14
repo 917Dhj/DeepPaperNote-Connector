@@ -23,49 +23,22 @@
 	***** END LICENSE BLOCK *****
 */
 
-// We cannot display a progress window in Firefox PDFs and if CSP sets a sandbox
-// We detect it and initiate a save directly from the background page
-// and changes the action button into a "tick.png" icon after the save is complete
+// We cannot display the save panel if the page CSP sets a sandbox without scripts
+// (e.g. GitHub gists), so mark the tab and explain on the toolbar button instead
 Zotero.WebRequestIntercept.addListener('headersReceived', function(details) {
 	// Proxy login is a POST method that gets redirected to the final destination via a 302
 	if (details.method != "GET" && details.statusCode < 300 && details.statusCode >= 400) return;
 	
-	let isPDF = false;
-	let isCSPProtected = false;
 	const contentType = details.responseHeadersObject['content-type']?.split(';')[0]?.trim();
-
-	// Firefox currently does not allow to inject scripts into pdf pages
-	// See https://bugzilla.mozilla.org/show_bug.cgi?id=1454760#c3
-	if (Zotero.isFirefox) {
-		if (contentType) {
-			if (contentType.includes("application/pdf")) {
-				isPDF = true;
-			}
-			// While Firefox will show the PDF viewer for application/octet-stream, it must pass some
-			// additional checks: the URL must end in .pdf and the PDF must be a top-level document.
-			// https://searchfox.org/mozilla-central/rev/50c3cf7a3c931409b54efa009795b69c19383541/toolkit/components/pdfjs/content/PdfStreamConverter.jsm#1100-1121
-			else if (contentType.includes("application/octet-stream")
-					&& details.url.includes(".pdf") && details.type === "main_frame") {
-				isPDF = true;
-			}
-		}
-	}
-	
-	if (!isPDF) {
-		// Address pages like github gists where we are prevented from injecting the progress window due to
-		// the restrictive CSP.
-		const csp = details.responseHeadersObject['content-security-policy'];
-		isCSPProtected = csp && csp.includes("sandbox") && !csp.includes("allow-scripts");
-	}
-	
-	if (!isPDF && !isCSPProtected) return;
+	const csp = details.responseHeadersObject['content-security-policy'];
+	const isCSPProtected = csp && csp.includes("sandbox") && !csp.includes("allow-scripts");
+	if (!isCSPProtected) return;
 	
 	// Somehow browser.webNavigation.onCommitted runs later than headersReceived
 	setTimeout(async function() {
 		var tab = await browser.tabs.get(details.tabId);
 		let tabInfo = Zotero.Connector_Browser.getTabInfo(tab.id);
 		tabInfo.uninjectable = true;
-		tabInfo.isPDF = isPDF;
 		tabInfo.contentType = contentType;
 		Zotero.Connector_Browser._updateExtensionUI(tab);
 	}, 100);

@@ -23,10 +23,6 @@
     ***** END LICENSE BLOCK *****
 */
 
-if (!Zotero.isManifestV3) {
-	browser.action = browser.browserAction;
-}
-
 Zotero.Connector_Browser = new function() {
 	var _tabInfo = {};
 	var _tabInjections = {};
@@ -34,7 +30,8 @@ Zotero.Connector_Browser = new function() {
 		/*INJECT SCRIPTS*/
 	];
 	this._tabInfo = _tabInfo;
-	let buttonContext = ['browser_action'];
+	// Chrome stopped showing context menus on button right-click with only 'browser_action'
+	let buttonContext = ['browser_action', 'action'];
 	
 	// Keep MV3 alive while long-running download, selection or interception work is active.
 	// Extension API calls reset the service worker idle timer, so ping one while work is pending.
@@ -56,17 +53,8 @@ Zotero.Connector_Browser = new function() {
 	this.isKeepingServiceWorkerAlive = () => keepAliveCount > 0;
 	
 	this.init = async function() {
-		if (Zotero.isManifestV3) {
-			if (Zotero.isChromium) {
-				// Chrome recently stopped displaying context menus on button right-click
-				// with 'browser_action' as context. It's supposed to work, so maybe a bug
-				// in Chrome, but let's fix it on our side. Firefox, meanwhile, throws if 'action'
-				// is included in the context list.
-				buttonContext.push('action');
-				await Zotero.OffscreenManager.init();
-			}
-			this._tabInfo = _tabInfo = await Zotero.Utilities.Connector.createMV3PersistentObject('tabInfo', {ignoreKeys: ['selectCallback']});
-		}
+		await Zotero.OffscreenManager.init();
+		this._tabInfo = _tabInfo = await Zotero.Utilities.Connector.createMV3PersistentObject('tabInfo', {ignoreKeys: ['selectCallback']});
 	}
 	
 	this._getNewTabInfo = function() {
@@ -102,59 +90,30 @@ Zotero.Connector_Browser = new function() {
 	}
 
 	/**
-	 * Gets cookies from the store associated with a tab. In Safari, the default cookie store
-	 * may differ from the store used by browser tabs, so it must be resolved at runtime. If
-	 * no tab is provided, the active tab in the current window is used.
-	 *
 	 * @param {Object} details
-	 * @param {Number} tabId
 	 * @return {Promise<browser.cookies.Cookie[]>}
 	 */
-	this.getAllCookies = async function(details, tabId=null) {
-		details = {...details};
-		if (!Zotero.isSafari || details.storeId) {
-			return browser.cookies.getAll(details);
-		}
-
-		if (tabId === null) {
-			let tabs = await browser.tabs.query({active: true, currentWindow: true});
-			tabId = tabs[0]?.id;
-		}
-
-		let stores = await browser.cookies.getAllCookieStores();
-		let store = stores.find(store => store.tabIds.includes(tabId))
-			|| stores.find(store => store.tabIds.length)
-			|| stores[0];
-		if (store) {
-			details.storeId = store.id;
-		}
+	this.getAllCookies = async function(details) {
 		return browser.cookies.getAll(details);
 	}
 
 	this.executeScript = function(tabId, details) {
-		if (Zotero.isManifestV3) {
-			if (details.hasOwnProperty('code')) {
-				Zotero.logError(`Attempting to inject script in MV3 with code string: ${details.code}`);
-				return;
-			}
-			delete details.runAt;
-			if (details.hasOwnProperty('file')) {
-				details.files = [details.file];
-				delete details.file;
-			}
-			if (!details.hasOwnProperty('target')) details.target = {};
-			details.target.tabId = tabId;
-			if (details.hasOwnProperty('frameId')) {
-				details.target.frameIds = [details.frameId];
-				delete details.frameId;
-			}
-			delete details.runAt;
-			let executeScript = chrome ? chrome.scripting.executeScript : browser.scripting.executeScript;
-			return executeScript(details);
+		if (details.hasOwnProperty('code')) {
+			Zotero.logError(`Attempting to inject script in MV3 with code string: ${details.code}`);
+			return;
 		}
-		else {
-			return browser.tabs.executeScript(tabId, details);
+		delete details.runAt;
+		if (details.hasOwnProperty('file')) {
+			details.files = [details.file];
+			delete details.file;
 		}
+		if (!details.hasOwnProperty('target')) details.target = {};
+		details.target.tabId = tabId;
+		if (details.hasOwnProperty('frameId')) {
+			details.target.frameIds = [details.frameId];
+			delete details.frameId;
+		}
+		return chrome.scripting.executeScript(details);
 	};
 	
 	/**
@@ -231,39 +190,12 @@ Zotero.Connector_Browser = new function() {
 		if(tab) _updateInfoForTab(tab.id, url);
 	}
 	
-	/**
-	 * Called when Zotero goes online or offline
-	 * @param [String|Boolean] version - either `false` or version string from X-Zotero-Version header
-	 */
-	this.onStateChange = function() {};
-	
 	this.onTabActivated = function(tab) {
 		Zotero.Connector_Browser._updateExtensionUI(tab);
 	};
 	
-	/**
-	 * Called if Zotero version is determined to be incompatible with Standalone
-	 */
-	this.onIncompatibleStandaloneVersion = function() {};
-
 	this.onZoteroButtonElementClick = function(tab) {
 		return _browserAction(tab);
-	}
-	
-	/**
-	 * Called if Zotero version is determined to be incompatible with Standalone
-	 */
-	this.newerVersionRequiredPrompt = function() {
-		let clientName = ZOTERO_CONFIG.CLIENT_NAME;
-		let url = ZOTERO_CONFIG.CLIENT_DOWNLOAD_URL;
-		let pageName = Zotero.getString('progressWindow_error_upgradeClient_latestVersion');
-		let pageLink = `<a href="${url}">${pageName}</a>`;
-		
-		return Zotero.Messaging.sendMessage('confirm', {
-			title: Zotero.getString("general_warning"),
-			button2Text: "",
-			message: Zotero.getString("progressWindow_error_upgradeClient", [clientName, pageLink])
-		});
 	}
 
 	/**
@@ -373,31 +305,18 @@ Zotero.Connector_Browser = new function() {
 			
 			// Send a ready message to confirm successful injection
 			let readyMsg = `ready${Date.now()}`;
-			if (Zotero.isManifestV3) {
-				yield Zotero.Connector_Browser.executeScript(tab.id, {
-					frameId,
-					args: [readyMsg],
-					func: (readyMsg) => {
-						browser.runtime.onMessage.addListener(function awaitReady(request) {
-							if (request == readyMsg) {
-								browser.runtime.onMessage.removeListener(awaitReady);
-								return Promise.resolve(true);
-							}
-						});
-					}
-				})
-			} else {
-				yield browser.tabs.executeScript(tab.id, {
-					code: `browser.runtime.onMessage.addListener(function awaitReady(request) {
-					if (request == '${readyMsg}') {
-						browser.runtime.onMessage.removeListener(awaitReady);
-						return Promise.resolve(true);
-					}
-				})`,
-					frameId,
-					runAt: 'document_end'
-				});	
-			}
+			yield Zotero.Connector_Browser.executeScript(tab.id, {
+				frameId,
+				args: [readyMsg],
+				func: (readyMsg) => {
+					browser.runtime.onMessage.addListener(function awaitReady(request) {
+						if (request == readyMsg) {
+							browser.runtime.onMessage.removeListener(awaitReady);
+							return Promise.resolve(true);
+						}
+					});
+				}
+			})
 			
 			while (true) {
 				try {
@@ -494,13 +413,6 @@ Zotero.Connector_Browser = new function() {
 		if (win.left < options.left) {
 			browser.windows.update(win.id, { left: options.left });
 		}
-		// Fix a Firefox bug where content does not appear before resize on linux
-		// https://bugzilla.mozilla.org/show_bug.cgi?id=1402110
-		// this one might actually get fixed, unlike the one above
-		if (Zotero.isFirefox) {
-			await Zotero.Promise.delay(1000);
-			browser.windows.update(win.id, {width: win.width+1});
-		}
 		if (typeof options.onClose == 'function') {
 			browser.windows.onRemoved.addListener(function onClose(id) {
 				if (id == win.id) options.onClose();
@@ -525,12 +437,7 @@ Zotero.Connector_Browser = new function() {
 		if (!tab) {
 			tab = await getCurrentTab();
 		}
-		let tabProps = { index: tab.index + 1 };
-		// Firefox doesn't support openerTabId
-		if (!Zotero.isFirefox) {
-			tabProps.openerTabId = tab.id;
-		}
-		browser.tabs.create(Object.assign({url}, tabProps));
+		browser.tabs.create({url, index: tab.index + 1, openerTabId: tab.id});
 	};
 	
 	this.openPreferences = function(paneID, tab) {
@@ -628,14 +535,6 @@ Zotero.Connector_Browser = new function() {
 		var isPDF = tabInfo.isPDF;
 		var translators = tabInfo.translators;
 		
-		// Safari runs content scripts only on sites where the user has granted access, and
-		// clicking the button on other sites enables the Connector on the site instead of
-		// saving. Until a content script reports detection results, keep the default Z icon
-		// rather than showing a save action that hasn't been determined.
-		if (Zotero.isSafari && !translators && !isPDF) {
-			return;
-		}
-		
 		var showSaveMenu = translators && translators.length;
 		let unproxiedURL = Zotero.Proxies.proxyToProper(url, true);
 		var showProxyMenu = !isPDF
@@ -670,13 +569,8 @@ Zotero.Connector_Browser = new function() {
 		if (showProxyMenu) {
 			_showProxyContextMenuItems(url);
 		}
-		if (unproxiedURL && !(Zotero.isFirefox && isPDF)) {
+		if (unproxiedURL) {
 			_showCopyUnproxiedURLCopyContextMenuItem(url);
-		}
-		
-		if (!Zotero.isChromium) {
-			_showPreferencesContextMenuItem();
-			_showTabContextMenuItem();
 		}
 	}
 	
@@ -701,9 +595,6 @@ Zotero.Connector_Browser = new function() {
 		"zotero-context-menu-pdf-save": function (info, tab) {
 			Zotero.Connector_Browser.saveAsWebpage(tab);
 		},
-		"zotero-context-menu-preferences": function () {
-			browser.tabs.create({url: browser.runtime.getURL('deeppapernote-options.html')});
-		},
 		"zotero-context-menu-copy-unproxied-url": async (info, tab) => {
 			// navigator.clipboard.writeText doesn't work in the background page because it has no focus
 			Zotero.Messaging.sendMessage('clipboardWrite', [Zotero.Proxies.proxyToProper(tab.url)], tab);
@@ -711,13 +602,6 @@ Zotero.Connector_Browser = new function() {
 		"zotero-context-menu-copy-unproxied-link": async (info, tab) => {
 			// navigator.clipboard.writeText doesn't work in the background page because it has no focus
 			Zotero.Messaging.sendMessage('clipboardWrite', [Zotero.Proxies.proxyToProper(info.linkUrl)], tab);
-		},
-		"zotero-context-menu-tabs": async () => {
-			const tabs = await browser.tabs.query({highlighted: true, currentWindow: true});
-			Zotero.debug(`Saving ${tabs.length} tabs`);
-			for (let tab of tabs) {
-				await _browserAction(tab);
-			}
 		}
 	};
 	
@@ -739,7 +623,7 @@ Zotero.Connector_Browser = new function() {
 		// The PDF viewer in Chromium is apparently implemented as a special extension.
 		// If you right-click on the pdf-reader UI and select a Zotero option, the handler
 		// here gets passed a tab that has id == -1 and an internal extension URL.y
-		if (Zotero.isChromium && tab.id === -1) {
+		if (tab.id === -1) {
 			tab = await getCurrentTab();
 		}
 		const handler = _contextMenuHandlers[id];
@@ -872,26 +756,6 @@ Zotero.Connector_Browser = new function() {
 		}
 	}
 
-	function _showTabContextMenuItem() {
-		browser.contextMenus.create({
-			id: "zotero-context-menu-tabs",
-			title: 'Save highlighted tabs to DeepPaperNote',
-			contexts: ['tab']
-		});
-	}
-	function _showPreferencesContextMenuItem() {
-		browser.contextMenus.create({
-			type: "separator",
-			id: "zotero-context-menu-pref-separator",
-			contexts: ['page', ...buttonContext]
-		});
-		browser.contextMenus.create({
-			id: "zotero-context-menu-preferences",
-			title: "Preferences",
-			contexts: ['page', ...buttonContext]
-		});
-	}
-	
 	/**
 	 * Removes information about a specific tab
 	 */
@@ -937,17 +801,16 @@ Zotero.Connector_Browser = new function() {
 	}
 	
 	/**
-	 * Safari doesn't run content scripts in tabs that are already open when the user grants
-	 * site access, and after the extension reloads or updates, content scripts in open tabs
-	 * can no longer reach it, so the tab never reports detection results. Inject the scripts
-	 * on demand before performing a user action, and give translator detection a moment to
-	 * report before a save mode is chosen
+	 * After the extension reloads or updates, content scripts in open tabs can no longer
+	 * reach it, so the tab never reports detection results. Inject the scripts on demand
+	 * before performing a user action, and give translator detection a moment to report
+	 * before a save mode is chosen
 	 *
 	 * @param tab {Object}
 	 * @returns {Promise<Boolean>} False if the action should be abandoned
 	 */
 	async function _ensureScriptsInjected(tab) {
-		if (!Zotero.isSafari && Zotero.Connector_Browser.getTabInfo(tab.id).translators) return true;
+		if (Zotero.Connector_Browser.getTabInfo(tab.id).translators) return true;
 		await Zotero.Connector_Browser.injectTranslationScripts(tab);
 		let startURL = Zotero.Connector_Browser.getTabInfo(tab.id).url;
 		// The tabInfo object is replaced when the tab navigates, so look it up on each check
@@ -1103,13 +966,8 @@ Zotero.Connector_Browser = new function() {
 			return Zotero.Connector_Browser._updateExtensionUI(tab);
 		}
 
-		// If you try to inject scripts into a frame here in Firefox it claims we don't have
-		// host permissions for the frame (false/bug), so we do it in onDOMContentLoaded
-		// (but it makes frame translator detection slower in Firefox)
-		if (!Zotero.isFirefox) {
-			if (!tab) tab = await browser.tabs.get(details.tabId);
-			await Zotero.Connector_Browser.onFrameLoaded(tab, details.frameId, details.url);
-		}
+		if (!tab) tab = await browser.tabs.get(details.tabId);
+		await Zotero.Connector_Browser.onFrameLoaded(tab, details.frameId, details.url);
 		
 		if (details.frameId !== 0) return;
 		
@@ -1122,13 +980,6 @@ Zotero.Connector_Browser = new function() {
 		}
 	}
 	
-	async function onDOMContentLoaded(details) {
-		if (Zotero.isFirefox) {
-			let tab = await browser.tabs.get(details.tabId);
-			await Zotero.Connector_Browser.onFrameLoaded(tab, details.frameId, details.url);
-		}
-	}
-
 	browser.action.onClicked.addListener(waitForInit(logListenerErrors(_browserAction)));
 	
 	browser.tabs.onRemoved.addListener(waitForInit(logListenerErrors(_clearInfoForTab)));
@@ -1147,17 +998,7 @@ Zotero.Connector_Browser = new function() {
 	})));
 	
 	browser.webNavigation.onCommitted.addListener(waitForInit(logListenerErrors(onNavigation)));
-	browser.webNavigation.onDOMContentLoaded.addListener(waitForInit(logListenerErrors(onDOMContentLoaded)))
-	// Safari doesn't implement webNavigation.onHistoryStateUpdated, so feature-detect it. Where it's
-	// missing, the historyMonitor content script reports same-document navigations instead.
-	if (browser.webNavigation.onHistoryStateUpdated) {
-		browser.webNavigation.onHistoryStateUpdated.addListener(waitForInit(logListenerErrors(details => onNavigation(details, true))));
-	}
-	else {
-		this.onHistoryStateUpdated = waitForInit(logListenerErrors(
-			(url, tab) => onNavigation({url, tabId: tab.id, frameId: 0}, true)
-		));
-	}
+	browser.webNavigation.onHistoryStateUpdated.addListener(waitForInit(logListenerErrors(details => onNavigation(details, true))));
 }
 
 Zotero.initGlobal();
