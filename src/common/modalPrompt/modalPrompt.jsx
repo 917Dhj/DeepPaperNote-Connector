@@ -28,6 +28,7 @@ window.onload = async function () {
 		window.focus();
 		var deferred = Zotero.Promise.defer();
 		let div = document.querySelector('#zotero-modal-prompt');
+		let root = ReactDOM.createRoot(div);
 		let prompt = (
 			<Zotero.UI.ModalPrompt onClose={onClose} {...props}/>
 		);
@@ -37,10 +38,10 @@ window.onload = async function () {
 				checkboxChecked: state.checkboxChecked,
 				inputText: state.inputText
 			});
-			ReactDOM.unmountComponentAtNode(div);
+			root.unmount();
 			Zotero.Messaging.sendMessage('modalPrompt.close', null);
 		}
-		ReactDOM.render(prompt, div);
+		root.render(prompt);
 		document.body.appendChild(div);
 		return await deferred.promise;
 	});

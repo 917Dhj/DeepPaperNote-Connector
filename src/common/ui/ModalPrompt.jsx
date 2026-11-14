@@ -39,6 +39,7 @@ Zotero.UI.ModalPrompt = class ModalPrompt extends React.Component {
 			inputText: this.props.inputText || "",
 		};
 		
+		this.button1Ref = React.createRef();
 		this.escListener = this.escListener.bind(this);
 		this.onInputChange = this.onInputChange.bind(this);
 		this.onCheckboxChange = this.onCheckboxChange.bind(this);
@@ -49,7 +50,7 @@ Zotero.UI.ModalPrompt = class ModalPrompt extends React.Component {
 		document.addEventListener('keyup', this.escListener);
 		setTimeout(() => {
 			window.focus();
-			this.refs.button1.focus()
+			this.button1Ref.current?.focus();
 		}, 50);
 	}
 	
@@ -115,7 +116,7 @@ Zotero.UI.ModalPrompt = class ModalPrompt extends React.Component {
 			if (this.props[`button${i}Text`].length) {
 				buttons[i-1] = <input type="button" name={i} value={this.props[`button${i}Text`]}
 					disabled={i==1 && this.state.checkboxBlocked}
-					ref={`button${i}`}
+					ref={i == 1 ? this.button1Ref : null}
 					className="ModalPrompt-button"/>
 			}
 		}
