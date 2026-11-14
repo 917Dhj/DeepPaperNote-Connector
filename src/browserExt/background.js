@@ -66,15 +66,6 @@ Zotero.Connector_Browser = new function() {
 				await Zotero.OffscreenManager.init();
 			}
 			this._tabInfo = _tabInfo = await Zotero.Utilities.Connector.createMV3PersistentObject('tabInfo', {ignoreKeys: ['selectCallback']});
-			setInterval(async () => {
-				let tabs = await browser.tabs.query({});
-				for (let tab of tabs) {
-					// Remove cached tabInfo for tabs that are no longer open every 15 minutes
-					if (!(tab.id in _tabInfo)) {
-						_clearInfoForTab(tab.id)
-					}
-				}
-			}, 15 * 60e3);
 		}
 	}
 	
