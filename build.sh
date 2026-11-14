@@ -2,7 +2,9 @@
 
 CWD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$CWD/build}"
-VERSION="4.999.0"
+# repo.zotero.org routes versions below 3.0 to a retired translator repository,
+# so the extension version must stay >= 3.0.
+VERSION="$(node -p "require('$CWD/package.json').version")"
 DEBUG=
 
 function usage {
