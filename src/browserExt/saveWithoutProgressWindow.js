@@ -72,9 +72,10 @@ Zotero.WebRequestIntercept.addListener('headersReceived', function(details) {
 });
 
 Zotero.Utilities.saveWithoutProgressWindow = async function (tab, frameId) {
-	await browser.browserAction.setIcon({tabId: tab.id, path: "images/cross.png"});
-	await browser.browserAction.setTitle({
+	await browser.action.setBadgeBackgroundColor({tabId: tab.id, color: '#d73a4a'});
+	await browser.action.setBadgeText({tabId: tab.id, text: '!'});
+	await browser.action.setTitle({
 		tabId: tab.id,
-		title: "Open the PDF in a normal tab to confirm its metadata and save it."
+		title: "DeepPaperNote Connector cannot run on this page. Open the paper's PDF in a normal tab to save it."
 	});
 }

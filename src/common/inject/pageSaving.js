@@ -262,7 +262,7 @@ let PageSaving = {
 							{
 								sessionID,
 								id: null,
-								iconSrc: Zotero.getExtensionURL("images/treeitem-note.png"),
+								iconSrc: Zotero.ItemTypes.getImageSrc("note"),
 								title: Zotero.Utilities.cleanTags(note.note),
 								parentItem: item.id,
 								progress: 100,
