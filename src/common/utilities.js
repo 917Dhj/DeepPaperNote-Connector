@@ -117,20 +117,6 @@ Zotero.Utilities.Connector = {
 		return makeDeepProxy(obj);
 	},
 	
-	keepServiceWorkerAliveFunction: function(fn) {
-		return async function(...args) {
-			try {
-				Zotero.Connector_Browser.setKeepServiceWorkerAlive(true);
-				let result = fn.apply(this, args);
-				if (result.then) result = await result;
-				return result;
-			}
-			finally {
-				Zotero.Connector_Browser.setKeepServiceWorkerAlive(false);
-			}
-		}
-	},
-	
 	getContentTypeFromXHR: function(xhr) {
 		var contentType = "application/octet-stream",
 			charset = null,
