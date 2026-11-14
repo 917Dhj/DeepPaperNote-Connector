@@ -57,16 +57,16 @@ npm ci
 
 1. 打开 `chrome://extensions`，开启**开发者模式**。
 2. 选择**加载已解压的扩展程序**，选中仓库中的 `build/manifestv3` 文件夹。
-3. 复制扩展的 **ID**，下一步会用到。
+
+无论文件夹放在哪里，扩展 ID 都固定为 `fcbddigbhoibmokafhgaooekekobjbbf`。
 
 ### 3. 安装本地保存组件
 
-在同一个仓库目录中执行以下命令，将占位符替换为 Chrome 显示的扩展 ID：
+在同一个仓库目录中执行以下命令：
 
 ```sh
 python3 -m pip install -r native_host/requirements.txt
-python3 native_host/deeppapernote_host.py install \
-  --extension-id "<32-character Chrome extension ID>"
+python3 native_host/deeppapernote_host.py install
 ```
 
 两条命令请使用同一个 Python 环境；安装后的组件会使用该解释器。如果使用虚拟环境，安装后请保留该环境。
@@ -106,9 +106,9 @@ Connector 负责收藏，[DeepPaperNote](https://github.com/917Dhj/DeepPaperNote
 
 **会生成笔记或提取配图吗？** 不会。Connector 负责收藏 PDF；需要包含配图的深度笔记时，再使用 DeepPaperNote。
 
-**无法连接本地组件，或没有可选领域怎么办？** 检查共享 Vault 与论文目录是否已配置、论文目录下是否存在领域文件夹，以及安装组件时是否使用了当前扩展的 ID。共享配置缺失或无效时，保存会停止，不会退回旧位置。配置方法详见[用户配置说明](https://github.com/917Dhj/DeepPaperNote/blob/develop/skills/deeppapernote/references/user-configuration.md)。
+**无法连接本地组件，或没有可选领域怎么办？** 检查共享 Vault 与论文目录是否已配置、论文目录下是否存在领域文件夹，以及本地组件是否由包含固定扩展 ID 的版本安装（如果在这项改动之前安装过，请重新执行第 3 步）。共享配置缺失或无效时，保存会停止，不会退回旧位置。配置方法详见[用户配置说明](https://github.com/917Dhj/DeepPaperNote/blob/develop/skills/deeppapernote/references/user-configuration.md)。
 
-**怎样更新？** 更新本地仓库后，执行 `git submodule update --init --recursive`、`npm ci` 和 `./build.sh`。重复第 3 步，更新已安装的本地组件及依赖，再重新加载扩展。如果 Chrome 分配了不同的扩展 ID，请使用新 ID 重新安装组件。
+**怎样更新？** 更新本地仓库后，执行 `git submodule update --init --recursive`、`npm ci` 和 `./build.sh`。重复第 3 步，更新已安装的本地组件及依赖，再重新加载扩展。
 
 ## 开发与贡献
 

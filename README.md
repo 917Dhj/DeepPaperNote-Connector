@@ -57,16 +57,16 @@ In Chrome:
 
 1. Open `chrome://extensions` and enable **Developer mode**.
 2. Choose **Load unpacked** and select this repository's `build/manifestv3` folder.
-3. Copy the extension's **ID** for the next step.
+
+The extension ID is always `fcbddigbhoibmokafhgaooekekobjbbf`, wherever the folder lives.
 
 ### 3. Install the local saving component
 
-Run these commands from the same repository directory, replacing the placeholder with the ID shown by Chrome:
+Run these commands from the same repository directory:
 
 ```sh
 python3 -m pip install -r native_host/requirements.txt
-python3 native_host/deeppapernote_host.py install \
-  --extension-id "<32-character Chrome extension ID>"
+python3 native_host/deeppapernote_host.py install
 ```
 
 Use the same Python environment for both commands; the installed host uses that interpreter. If you use a virtual environment, keep it available after installation.
@@ -106,9 +106,9 @@ Different PDF versions can have their own corresponding notes; existing notes re
 
 **Does it generate notes or extract figures?** No. Connector collects PDFs. Use DeepPaperNote when you want a deep-reading note with figures.
 
-**What if the host cannot connect or no domains appear?** Check that the shared Vault and papers folder are configured, a domain folder exists under that papers folder, and the host was installed with this extension's ID. Missing or invalid shared configuration blocks saving instead of using an older destination. For configuration help, see [User Configuration](https://github.com/917Dhj/DeepPaperNote/blob/develop/skills/deeppapernote/references/user-configuration.md).
+**What if the host cannot connect or no domains appear?** Check that the shared Vault and papers folder are configured, a domain folder exists under that papers folder, and the host was installed from a checkout that includes the fixed extension ID (rerun step 3 if you installed it before that change). Missing or invalid shared configuration blocks saving instead of using an older destination. For configuration help, see [User Configuration](https://github.com/917Dhj/DeepPaperNote/blob/develop/skills/deeppapernote/references/user-configuration.md).
 
-**How do I update?** After updating the checkout, run `git submodule update --init --recursive`, `npm ci`, and `./build.sh`. Repeat step 3 to update the installed host and its dependencies, then reload the extension. If Chrome assigns a different extension ID, use that ID when reinstalling the host.
+**How do I update?** After updating the checkout, run `git submodule update --init --recursive`, `npm ci`, and `./build.sh`. Repeat step 3 to update the installed host and its dependencies, then reload the extension.
 
 ## Development and contributions
 

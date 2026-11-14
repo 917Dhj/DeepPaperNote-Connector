@@ -53,6 +53,8 @@ except ImportError:
 
 
 HOST_NAME = "com.deeppapernote.connector"
+# Derived from the public "key" in src/browserExt/manifest-v3.json.
+EXTENSION_ID = "fcbddigbhoibmokafhgaooekekobjbbf"
 PROTOCOL_VERSION = 1
 MAX_MESSAGE_BYTES = 2 * 1024 * 1024
 MAX_CHUNK_BYTES = 1024 * 1024
@@ -551,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
                 default="",
                 help="Optional assertion against the shared Skill Vault",
             )
-            parser.add_argument("--extension-id", required=True)
+            parser.add_argument("--extension-id", default=EXTENSION_ID)
             parser.add_argument("--papers-dir", default="")
             args = parser.parse_args(argv[1:])
             print(
