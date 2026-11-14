@@ -78,6 +78,7 @@
 			margin: 'initial',
 			zIndex: 2147483647,
 			display: 'none',
+			colorScheme: 'light dark',
 		});
 		let iframe = frame.frame;
 

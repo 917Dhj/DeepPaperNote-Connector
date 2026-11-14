@@ -1,10 +1,56 @@
+/* The embedding iframe also sets color-scheme: light dark, so prefers-color-scheme
+   follows the user's preference instead of the host page, and the two schemes match. */
+:root {
+	color-scheme: light dark;
+	--bg: #ededed;
+	--fg: #1f1f1f;
+	--muted: #555;
+	--border: #aaa;
+	--control-bg: white;
+	--error: #b42318;
+	--error-bg: #f8d7da;
+	--ok-bg: #dcefdc;
+	--primary: #5c2d91;
+	--primary-fg: white;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #2b2b30;
+		--fg: #ececf1;
+		--muted: #b4b4bc;
+		--border: #5c5c66;
+		--control-bg: #1e1e22;
+		--error: #ff8a80;
+		--error-bg: #4a1f22;
+		--ok-bg: #1f3d26;
+		--primary: #7b4cc2;
+		--primary-fg: white;
+	}
+}
+
 body {
 	margin: 0;
+	color: var(--fg);
+	background: transparent;
 	font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 button {
-	border: 1px solid #aaa;
+	border: 1px solid var(--border);
+	color: var(--fg);
+}
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+	position: absolute !important;
+	clip-path: inset(50%) !important;
+	overflow: hidden !important;
+	width: 1px !important;
+	height: 1px !important;
+	margin: -1px !important;
+	padding: 0 !important;
+	border: 0 !important;
+	white-space: nowrap !important;
 }
 
 .ProgressWindow-box {
@@ -12,8 +58,8 @@ button {
 	max-width: 92%;
 	margin-left: 4px;
 	padding: 10px;
-	border: 1px solid #aaa;
-	background: #ededed;
+	border: 1px solid var(--border);
+	background: var(--bg);
 	box-shadow: rgba(0, 0, 0, .25) 0 5px 20px -2px;
 }
 
@@ -62,7 +108,28 @@ button {
 .DeepPaperNote-field select {
 	min-width: 0;
 	padding: 4px 6px;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	color: var(--fg);
+	background: var(--control-bg);
 	font: inherit;
+}
+
+.DeepPaperNote-fieldError {
+	display: none;
+	grid-column: 2;
+	color: var(--error);
+	font-weight: 600;
+}
+
+/* :is() keeps the rule valid where :user-invalid is unsupported (before Chrome 119) */
+.DeepPaperNote-field input:is(:user-invalid, [aria-invalid="true"]) {
+	border-color: var(--error);
+	background: var(--error-bg);
+}
+
+.DeepPaperNote-field input:is(:user-invalid, [aria-invalid="true"]) + .DeepPaperNote-fieldError {
+	display: block;
 }
 
 .DeepPaperNote-metadata,
@@ -72,25 +139,25 @@ button {
 
 .DeepPaperNote-path div {
 	margin-top: 3px;
-	color: #555;
+	color: var(--muted);
 	white-space: nowrap;
 }
 
 .DeepPaperNote-existing,
 .DeepPaperNote-path.is-error div {
-	color: #b42318;
+	color: var(--error);
 	font-weight: 600;
 }
 
 .DeepPaperNote-status {
 	padding: 6px 8px;
 	border-radius: 4px;
-	background: #dcefdc;
+	background: var(--ok-bg);
 }
 
 .DeepPaperNote-status.is-error {
-	color: #b42318;
-	background: #f8d7da;
+	color: var(--error);
+	background: var(--error-bg);
 }
 
 .DeepPaperNote-actions {
@@ -101,11 +168,11 @@ button {
 .DeepPaperNote-actions button {
 	padding: 5px 12px;
 	border-radius: 4px;
-	background: white;
+	background: var(--control-bg);
 }
 
 .DeepPaperNote-actions button.is-primary {
-	border-color: #5c2d91;
-	color: white;
-	background: #5c2d91;
+	border-color: var(--primary);
+	color: var(--primary-fg);
+	background: var(--primary);
 }
