@@ -76,7 +76,6 @@ Zotero.Utilities.Connector = {
 	 * @returns {Promise<Object>} A deep Proxy over the stored (or empty) object
 	 */
 	createMV3PersistentObject: async function (name, options={}) {
-		if (!Zotero.isManifestV3) return {};
 		let ignoreKeys = options.ignoreKeys || [];
 		let stored = await browser.storage.session.get({[name]: "{}"});
 		let obj = JSON.parse(stored[name]);
@@ -226,26 +225,6 @@ Zotero.Utilities.Connector = {
 		return result;
 	},
 	
-	/**
-	 * Converts a base64 encoded string back to an ArrayBuffer
-	 * 
-	 * @param {string} base64 - The base64 encoded string to convert
-	 * @return {ArrayBuffer} - The ArrayBuffer
-	 */
-	base64ToArrayBuffer: function(base64) {
-		// Convert base64 to binary string
-		const binaryString = atob(base64);
-		const len = binaryString.length;
-		
-		// Create a Uint8Array from the binary string
-		const uint8Array = new Uint8Array(len);
-		for (let i = 0; i < len; i++) {
-			uint8Array[i] = binaryString.charCodeAt(i);
-		}
-		
-		return uint8Array.buffer;
-	},
-
 	/**
 	 * Try to guess the mime type of an attachment based on its URL.
 	 * Used as a fallback when the mime type is not provided by the translator.

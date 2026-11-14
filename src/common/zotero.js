@@ -34,11 +34,9 @@ var Zotero = global.Zotero = new function() {
 	this.isDebug = false;
 	
 	// For autocomplete in IDEs
-	this.allowRepoTranslatorTester = this.isManifestV3
-		= this.isFirefox = this.isSafari = null;
+	this.allowRepoTranslatorTester = null;
 	this.isBrowserExt = true;
 	/* this.allowRepoTranslatorTester = SET IN BUILD SCRIPT */;
-	/* this.isManifestV3 = SET IN BUILD SCRIPT */;
 
 	this.initialized = false;
 	this.initDeferred = {};
@@ -47,46 +45,13 @@ var Zotero = global.Zotero = new function() {
 		this.initDeferred.reject = reject;
 	}.bind(this));
 	
-	// Browser check adopted from:
-	// http://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser
-	/* this.isFirefox = SET IN BUILD SCRIPT */;
-	/* this.isSafari = SET IN BUILD SCRIPT */;
-
-	this.isChrome = this.isEdge = false;
-	if (!this.isFirefox && !this.isSafari) {
-		this.isChromium = true;
-		if (global.navigator.userAgent.includes("Edg/")) {
-			this.isEdge = true;
-		} else {
-			// If browser ext is not fx or edge then treat it as Chrome
-			// since it's probably installed with compatible browsers such as Opera from the
-			// Chrome extension store
-			this.isChrome = true;
-		}
-	}
 	this.isOffscreen = typeof document != 'undefined' && document.location.href.endsWith('offscreenSandbox.html');
 
 	this.isMac = (global.navigator.platform.substr(0, 3) == "Mac");
 	this.isWin = (global.navigator.platform.substr(0, 3) == "Win");
 	this.isLinux = (global.navigator.platform.substr(0, 5) == "Linux");
 
-	if (this.isFirefox) {
-		this.browser = "g";
-		this.clientName = 'Firefox';
-	} else if (this.isSafari) {
-		this.browser = "s";
-		this.clientName = 'Safari';
-	} else if (this.isEdge) {
-		this.browser = "c";
-		this.clientName = 'Edge';
-	} else if (this.isChrome) {
-		this.browser = "c";
-		this.clientName = 'Chrome';
-	} else {
-		// Assume this is something with no more capabilities than IE
-		this.browser = "i";
-		this.clientName = global.navigator.appName;
-	}
+	this.clientName = 'Chrome';
 	this.appName = `${ZOTERO_CONFIG.CLIENT_NAME} Connector for ${this.clientName}`;
 	
 	if (!this.isOffscreen) {
@@ -107,39 +72,22 @@ var Zotero = global.Zotero = new function() {
 				+ `> ${Zotero.version}; resetting for migration evaluation`);
 			lastVersion = "5.0.100";
 		}
-		if (Zotero.Utilities.semverCompare(lastVersion, "5.0.168") < 0 && Zotero.isFirefox) {
-			// We were setting DNR header replacement rules on Firefox http.js without
-			// removing them, and this breaks translation sometimes
-			// See https://github.com/zotero/translate/issues/41
-			const rules = await browser.declarativeNetRequest.getDynamicRules({});
-			let ruleIDs = [];
-			for (const rule of rules) {
-				if (rule.action.type === 'modifyHeaders') {
-					ruleIDs.push(rule.id);
-				}
+		let done = false;
+		try { done = !!Zotero.Prefs.get('migration.resetTranslators'); } catch (e) {}
+		if (!done) {
+			Zotero.debug("Migration: resetting translator caches");
+			try {
+				Zotero.Prefs.clear('translatorMetadata');
+				Zotero.Prefs.clear('connector.repo.lastCheck.localTime');
+				Zotero.Prefs.clear('connector.repo.lastCheck.repoTime');
+				await Zotero.Prefs.removeAllCachedTranslators();
+				await Zotero.Translators.updateFromRemote(true);
 			}
-			if (ruleIDs.length) {
-				await browser.declarativeNetRequest.updateDynamicRules({ removeRuleIds: ruleIDs });
+			catch (e) {
+				Zotero.logError(e);
+				return;
 			}
-		}
-		if (Zotero.isChromium) {
-			let done = false;
-			try { done = !!Zotero.Prefs.get('migration.resetTranslators'); } catch (e) {}
-			if (!done) {
-				Zotero.debug("Migration: resetting translator caches");
-				try {
-					Zotero.Prefs.clear('translatorMetadata');
-					Zotero.Prefs.clear('connector.repo.lastCheck.localTime');
-					Zotero.Prefs.clear('connector.repo.lastCheck.repoTime');
-					await Zotero.Prefs.removeAllCachedTranslators();
-					await Zotero.Translators.updateFromRemote(true);
-				}
-				catch (e) {
-					Zotero.logError(e);
-					return;
-				}
-				Zotero.Prefs.set('migration.resetTranslators', true);
-			}
+			Zotero.Prefs.set('migration.resetTranslators', true);
 		}
 		Zotero.Prefs.set('lastVersion', Zotero.version);
 	};
@@ -157,9 +105,7 @@ var Zotero = global.Zotero = new function() {
 	 */
 	this.initGlobal = async function() {
 		await Zotero.Errors.init();
-		if (Zotero.isManifestV3) {
-			Zotero.Errors.logServiceWorkerStarts(Zotero.Date.dateToSQL(new Date()));
-		}
+		Zotero.Errors.logServiceWorkerStarts(Zotero.Date.dateToSQL(new Date()));
 		Zotero.isBackground = true;
 		
 		browser.runtime.getPlatformInfo().then(function (info) {
@@ -173,14 +119,6 @@ var Zotero = global.Zotero = new function() {
 					this.platform = 'unix';
 			}
 		}.bind(this));
-		
-		// Add browser version info
-		if (this.isFirefox) {
-			browser.runtime.getBrowserInfo().then(info => {
-				this.browserVersion = info.version;
-				this.browserMajorVersion = parseInt(info.version.match(/^[0-9]+/)[0]);
-			});
-		}
 
 		Zotero.Messaging.init();
 		Zotero.Connector_Types.init();
@@ -207,10 +145,6 @@ var Zotero = global.Zotero = new function() {
 	this.initInject = async function() {
 		Zotero.isInject = true;
 		Zotero.Messaging.init();
-		// Safari loads raw localized strings here (getMessage mangles some); harmless elsewhere.
-		if (Zotero.isSafari) {
-			await Zotero.i18n.init();
-		}
 		Zotero.Connector_Types.init();
 		Zotero.Schema.init();
 		await this._initDateFormatsJSON();
@@ -286,11 +220,7 @@ var Zotero = global.Zotero = new function() {
 		}
 		
 		if (err.stack) {
-			if (!Zotero.isChrome) {
-				Zotero.Errors.log(err.message + '\n' + err.stack);
-			} else {
-				Zotero.Errors.log(err.stack);
-			}
+			Zotero.Errors.log(err.stack);
 		} else {
 			Zotero.Errors.log(err.message ? err.message : err.toString(), fileName, lineNumber);
 		}

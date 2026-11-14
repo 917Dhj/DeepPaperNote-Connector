@@ -30,15 +30,11 @@ Zotero.i18n = {
 			substitutions = [substitutions];
 		}
 		var str;
-		if (Zotero.isChrome) {
-			// Chrome doesn't play nice with the browser-polyfill.js API for this function
-			try {
-				str = chrome.i18n.getMessage(name, substitutions);
-			} catch (e) {
-				str = `{${name}}`;
-			}
-		} else {
-			str = browser.i18n.getMessage(name, substitutions);
+		// Chrome doesn't play nice with the browser-polyfill.js API for this function
+		try {
+			str = chrome.i18n.getMessage(name, substitutions);
+		} catch (e) {
+			str = `{${name}}`;
 		}
 		if (!str) {
 			Zotero.logError(new Error(`Localized string '${name}' not defined`));

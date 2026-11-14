@@ -74,13 +74,6 @@ Zotero.Inject = {
 		
 		await Zotero.initInject();
 		// Zotero namespace APIs now initialized
-
-		// Safari initially grants access only to sites approved by the user. The first click on the
-		// extension button reloads the page with content scripts enabled, without firing onClicked,
-		// so show the one-time site-access explanation from the injected script.
-		if (Zotero.isSafari && isTopWindow) {
-			await Zotero.HostPermissions.onPageLoad();
-		}
 		
 		document.addEventListener("ZoteroItemUpdated", function() {
 			Zotero.debug("Inject: ZoteroItemUpdated event received");

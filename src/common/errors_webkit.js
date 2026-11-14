@@ -27,12 +27,10 @@ Zotero.Errors = new function() {
 	var _output = [];
 	
 	this.init = async function() {
-		if (Zotero.isManifestV3) {
-			let storedData = await browser.storage.session.get({'loggedErrors': []});
-			_output = storedData.loggedErrors.concat(_output);
-			if (!_output.length) {
-				_output.push('Info: Service worker starts: ');
-			}
+		let storedData = await browser.storage.session.get({'loggedErrors': []});
+		_output = storedData.loggedErrors.concat(_output);
+		if (!_output.length) {
+			_output.push('Info: Service worker starts: ');
 		}
 	}
 	
@@ -59,9 +57,7 @@ Zotero.Errors = new function() {
 		err.push("]");
 		err = err.join("");
 		_output.push(err);
-		if (Zotero.isManifestV3) {
-			browser.storage.session.set({'loggedErrors': _output});
-		}
+		browser.storage.session.set({'loggedErrors': _output});
 	}
 	
 	/**
@@ -75,31 +71,20 @@ Zotero.Errors = new function() {
 	 * Get versions, platform, etc.
 	 */
 	this.getSystemInfo = async function () {
-		var info;
-		if (Zotero.isSafari && Zotero.isBackground) {
-			info = {
-				connector: "true",
-				version: Zotero.version,
-				platform: "Safari App Extension",
-			};
-		} else {
-			info = {
-				connector: "true",
-				version: Zotero.version,
-				platform: navigator.platform,
-				locale: navigator.language,
-				userAgent: navigator.userAgent,
-				isManifestV3: Zotero.isManifestV3
-			};
-		}
+		var info = {
+			connector: "true",
+			version: Zotero.version,
+			platform: navigator.platform,
+			locale: navigator.language,
+			userAgent: navigator.userAgent,
+		};
 		
 		info.appName = Zotero.appName;
-		// No management permission in Safari
-		if (Zotero.isBackground && !Zotero.isSafari) {
+		if (Zotero.isBackground) {
 			let granted = await browser.permissions.contains({permissions: ['management']});
 			if (granted) {
 				// See https://github.com/zotero/zotero-connectors/issues/476
-				if (!Zotero.isChromium || chrome.management.getAll) {
+				if (chrome.management.getAll) {
 					let extensions = await browser.management.getAll();
 					info.extensions = extensions
 						.filter(extension => extension.enabled && extension.name != Zotero.appName)

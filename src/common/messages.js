@@ -247,13 +247,9 @@ MESSAGES.COHTTP = {
 					let match = xhr.responseHeaders.match(new RegExp(`^${name}: (.*)$`, 'mi'));
 					return match ? match[1] : null;
 				};
-				// Safari Base64 encoded string
-				let isSafariArrayBuffer = Zotero.isSafari && xhr.responseType === "arraybuffer";
 				// MV3 packed array
 				let isArrayBuffer = Array.isArray(xhr.response) && xhr.responseType === "arraybuffer";
-				// MV2 blob url
-				let isBlob = xhr.response.startsWith && xhr.response.startsWith('blob:');
-				if (isSafariArrayBuffer || isArrayBuffer || isBlob) {
+				if (isArrayBuffer) {
 					xhr.response = await unpackArrayBuffer(xhr.response);
 				} else {
 					xhr.responseText = xhr.response;
@@ -264,56 +260,21 @@ MESSAGES.COHTTP = {
 	}
 };
 
-if (Zotero.isSafari) {
-	// Safari's i18n.getMessage corrupts messages where a positional placeholder is adjacent to a
-	// double quote (e.g., <a href="$1">): it drops the placeholder and a quote, mangling the markup.
-	// So injected pages/content scripts load the raw strings from the background and substitute $N
-	// themselves. See src/safari/i18n.js.
-	MESSAGES.i18n = Object.assign(MESSAGES.i18n || {}, { getStrings: true });
-}
-
-// Chrome does not support passing arrayBuffers via the message
-// passing protocol, so we convert it to a blob url and then unconvert it
-// on the receiving end.
-// There's been an open bug on the chrome bugtracker to fix this since
-// 2013: https://bugs.chromium.org/p/chromium/issues/detail?id=248548
-// 
-// And with manifestV3 service workers do not support URL.createObjectURL
-// so our best chance is to just pass the array bytes
-// but there's a 64MB limit or Chrome literally crashes
+// Chrome does not support passing arrayBuffers via the message passing protocol
+// (https://bugs.chromium.org/p/chromium/issues/detail?id=248548), and service workers
+// do not support URL.createObjectURL, so pass the array bytes instead.
+// There's a 64MB limit or Chrome literally crashes
 const MAX_CONTENT_SIZE = 8 * (1024 * 1024);
 function packArrayBuffer(arrayBuffer) {
-	if (Zotero.isFirefox) return arrayBuffer;
-	if (Zotero.isSafari) {
-		// Base64 encode the arrayBuffer
-		return Zotero.Utilities.Connector.arrayBufferToBase64(arrayBuffer);
+	let array = Array.from(new Uint8Array(arrayBuffer));
+	if (array.length > MAX_CONTENT_SIZE) {
+		// Truncating to MAX_CONTENT_SIZE. The largest filetype we save is images, and
+		// 8MB limit should be good for 99.9% of the cases.
+		array = array.slice(0, MAX_CONTENT_SIZE);
 	}
-	if (Zotero.isManifestV3) {
-		let array = Array.from(new Uint8Array(arrayBuffer));
-		if (array.length > MAX_CONTENT_SIZE) {
-			// Truncating to MAX_CONTENT_SIZE. The largest filetype we save is images, and
-			// 8MB limit should be good for 99.9% of the cases.
-			array = array.slice(0, MAX_CONTENT_SIZE);
-		}
-		return array;
-	}
-	return URL.createObjectURL(new Blob([arrayBuffer]));
+	return array;
 }
 
 async function unpackArrayBuffer(packedBuffer) {
-	if (Zotero.isFirefox) return packedBuffer;
-	if (Zotero.isSafari) {
-		return Zotero.Utilities.Connector.base64ToArrayBuffer(packedBuffer);
-	}
-	if (Zotero.isManifestV3) {
-		return new Uint8Array(packedBuffer).buffer
-	}
-	let blob = await (await fetch(packedBuffer)).blob();
-	return new Promise((resolve) => {
-		var fileReader = new FileReader();
-		fileReader.onload = function(event) {
-			resolve(event.target.result);
-		};
-		fileReader.readAsArrayBuffer(blob);
-	});
+	return new Uint8Array(packedBuffer).buffer
 }
