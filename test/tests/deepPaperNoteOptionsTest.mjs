@@ -29,22 +29,69 @@ describe('DeepPaperNote Settings', function() {
 
 	before(async function() {
 		previousDomain = await background(() => Zotero.Prefs.get('deepPaperNote.domain'));
-		await background(() => Zotero.Prefs.set('deepPaperNote.domain', '视觉理解'));
+		await background(() => {
+			Zotero.Prefs.set('deepPaperNote.domain', '视觉理解');
+			self.nativeHostStub = sinon.stub(browser.runtime, 'sendNativeMessage').callsFake(async (host, message) => (
+				message.type === 'list_domains'
+					? {ok: true, domains: ['视觉理解', '长视频理解']}
+					: {ok: true, path: `${message.item.domain}/connection-test/DeepPaperNote - 2026 - Connection Test.pdf`}
+			));
+		});
 		page = await browser.newPage();
 		await page.goto(getExtensionURL('deeppapernote-options.html'));
-		await page.evaluate(async () => {
-			browser.runtime.sendNativeMessage = async () => ({
-				ok: true,
-				domains: ['视觉理解', '长视频理解'],
-			});
-			await loadDomains();
-		});
 		await page.waitForSelector('#domain:not([disabled])');
 	});
 
 	after(async function() {
 		await page.close();
-		await background(value => Zotero.Prefs.set('deepPaperNote.domain', value), previousDomain);
+		await background(value => {
+			self.nativeHostStub.restore();
+			return Zotero.Prefs.set('deepPaperNote.domain', value);
+		}, previousDomain);
+	});
+
+	it('previews a destination through the background native host', async function() {
+		await within('click check', page.$eval('#check', button => button.click()));
+		await within('preview status', page.waitForFunction(
+			() => document.querySelector('#status').textContent.includes('Native host connected')
+		));
+		assert.include(await page.$eval('#status', node => node.textContent), '视觉理解/connection-test/');
+	});
+
+	it('reports saved only after the preference is stored', async function() {
+		await background(() => {
+			self.prefsSetStub = sinon.stub(Zotero.Prefs, 'set').rejects(new Error('storage full'));
+		});
+		try {
+			await within('click save', page.$eval('#save', button => button.click()));
+			await within('error status', page.waitForFunction(
+				() => document.querySelector('#status').textContent.includes('storage full')
+			));
+			assert.notInclude(await page.$eval('#status', node => node.textContent), 'saved.');
+		}
+		finally {
+			await background(() => self.prefsSetStub.restore());
+		}
+	});
+
+	it('shows how to install a missing native host', async function() {
+		await background(() => self.nativeHostStub.rejects(new Error('Specified native messaging host not found.')));
+		try {
+			await page.reload();
+			await within('error status', page.waitForFunction(
+				() => document.querySelector('#status').textContent.includes('not installed')
+			));
+			assert.include(await page.$eval('#status', node => node.textContent), 'deeppapernote_host.py install');
+		}
+		finally {
+			await background(() => self.nativeHostStub.callsFake(async (host, message) => (
+				message.type === 'list_domains'
+					? {ok: true, domains: ['视觉理解', '长视频理解']}
+					: {ok: true, path: `${message.item.domain}/connection-test/DeepPaperNote - 2026 - Connection Test.pdf`}
+			)));
+			await page.reload();
+			await page.waitForSelector('#domain:not([disabled])');
+		}
 	});
 
 	it('selects an existing folder and updates the live background preference', async function() {
